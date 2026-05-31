@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /shop/
+Disallow: /admin/
+Disallow: /super-admin/
+Disallow: /customer/
+Disallow: /api/
+Sitemap: https://yourdomain.com/sitemap.xml

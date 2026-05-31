@@ -1,0 +1,217 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ============================================
+       DESIGN SYSTEM — Section 3 of Blueprint
+       Theme: Modern Classic (Apple / iPhone Pro Style)
+       ============================================ */
+
+    /* Primary Colors */
+    --color-titanium:    #8A8A8F;
+    --color-silver:      #C7C7CC;
+    --color-deep:        #1D1D1F;
+    --color-white:       #F5F5F7;
+    --color-pure-white:  #FFFFFF;
+
+    /* Accent / Status Colors */
+    --color-success:     #30D158;
+    --color-warning:     #FF9F0A;
+    --color-danger:      #FF3B30;
+    --color-info:        #0A84FF;
+
+    /* Gradient */
+    --gradient-metallic: linear-gradient(135deg, #C7C7CC 0%, #8A8A8F 50%, #1D1D1F 100%);
+
+    /* ============================================
+       shadcn-vue CSS Variables (Light Theme)
+       Mapped to our Design System
+       ============================================ */
+    --background: 220 20% 97%;        /* Apple Off-White → #F5F5F7 */
+    --foreground: 240 6% 10%;         /* Deep Blue-Black → #1D1D1F */
+
+    --card: 0 0% 100%;                /* Pure White → #FFFFFF */
+    --card-foreground: 240 6% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 6% 10%;
+
+    --primary: 240 6% 10%;            /* Deep → main CTA */
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 240 5% 84%;          /* Silver-ish */
+    --secondary-foreground: 240 6% 10%;
+
+    --muted: 240 5% 90%;              /* Light gray bg */
+    --muted-foreground: 240 4% 46%;   /* Titanium */
+
+    --accent: 240 5% 90%;
+    --accent-foreground: 240 6% 10%;
+
+    --destructive: 0 84% 60%;         /* Danger red */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5% 84%;             /* Silver borders */
+    --input: 240 5% 84%;
+    --ring: 240 6% 10%;
+
+    --radius: 0.625rem;               /* 10px base for shadcn */
+
+    /* Typography */
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+
+    /* Smooth transitions for all interactive elements */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .dark {
+    --background: 240 6% 10%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 6% 14%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 6% 14%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 6% 10%;
+
+    --secondary: 240 4% 20%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 240 4% 20%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 240 4% 20%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 4% 20%;
+    --input: 240 4% 20%;
+    --ring: 240 5% 84%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-apple-white text-deep;
+    background-color: var(--color-white);
+    color: var(--color-deep);
+  }
+
+  h1 {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  h2 {
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  h3 {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  h4 {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  /* Micro-animations: All interactive elements */
+  a, button, input, select, textarea {
+    @apply transition-all duration-200 ease-in-out;
+  }
+}
+
+@layer components {
+  /* Glassmorphism utility */
+  .glass {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.8);
+  }
+
+  /* Metallic gradient */
+  .gradient-metallic {
+    background: var(--gradient-metallic);
+  }
+
+  /* Card styles */
+  .card-design {
+    @apply rounded-card shadow-card bg-pure-white;
+    border: 1px solid var(--color-silver);
+  }
+
+  /* Button styles */
+  .btn-design {
+    @apply rounded-btn font-medium;
+  }
+
+  /* Input styles */
+  .input-design {
+    @apply rounded-input shadow-input;
+  }
+
+  /* Badge / Pill */
+  .badge-pill {
+    @apply rounded-pill px-3 py-1 text-xs font-medium;
+  }
+
+  /* Status badge variants */
+  .badge-success {
+    @apply badge-pill;
+    background-color: var(--color-success);
+    color: white;
+  }
+
+  .badge-warning {
+    @apply badge-pill;
+    background-color: var(--color-warning);
+    color: white;
+  }
+
+  .badge-danger {
+    @apply badge-pill;
+    background-color: var(--color-danger);
+    color: white;
+  }
+
+  .badge-info {
+    @apply badge-pill;
+    background-color: var(--color-info);
+    color: white;
+  }
+}
+
+/* ============================================
+   Page Transitions
+   ============================================ */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.15s ease;
+}
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
