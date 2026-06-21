@@ -74,25 +74,30 @@ export default defineEventHandler(async (event) => {
     }
   )
 
-  // Get shop details
-  const { data: shop, error: shopError } = await supabase
-    .from('shops')
-    .select('id, working_hours, booking_settings, timezone, plan, paymongo_enabled, manual_payment_enabled, loyalty_enabled, loyalty_earn_rate, loyalty_earn_base, loyalty_welcome_bonus, loyalty_expiry_months, loyalty_tiers_enabled, loyalty_tiers')
-    .eq('id', shopId)
-    .single()
+  // Get shop and service details in parallel
+  const [shopResult, serviceResult] = await Promise.all([
+    supabase
+      .from('shops')
+      .select('id, working_hours, booking_settings, timezone, plan, paymongo_enabled, manual_payment_enabled, loyalty_enabled, loyalty_earn_rate, loyalty_earn_base, loyalty_welcome_bonus, loyalty_expiry_months, loyalty_tiers_enabled, loyalty_tiers')
+      .eq('id', shopId)
+      .single(),
+    supabase
+      .from('services')
+      .select('id, name, price, duration_mins, barber_ids')
+      .eq('id', serviceId)
+      .eq('shop_id', shopId)
+      .eq('is_active', true)
+      .single(),
+  ])
+
+  const shop = shopResult.data
+  const shopError = shopResult.error
+  const service = serviceResult.data
+  const serviceError = serviceResult.error
 
   if (shopError || !shop) {
     throw createError({ statusCode: 404, statusMessage: 'Shop not found' })
   }
-
-  // Get service details
-  const { data: service, error: serviceError } = await supabase
-    .from('services')
-    .select('id, name, price, duration_mins, barber_ids')
-    .eq('id', serviceId)
-    .eq('shop_id', shopId)
-    .eq('is_active', true)
-    .single()
 
   if (serviceError || !service) {
     throw createError({ statusCode: 404, statusMessage: 'Service not found' })

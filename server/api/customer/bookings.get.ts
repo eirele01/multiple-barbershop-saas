@@ -14,24 +14,15 @@
 import { createClient } from '@supabase/supabase-js'
 
 export default defineEventHandler(async (event) => {
+  const authHeader = getHeader(event, 'authorization')
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : ''
+  const authUser = await verifyAuth(token)
+
   const config = useRuntimeConfig()
   const supabase = createClient(
     config.public.supabaseUrl as string,
     config.supabaseServiceKey as string
   )
-
-  // Auth check
-  const authHeader = getHeader(event, 'authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-
-  const token = authHeader.substring(7)
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-  if (authError || !user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid token' })
-  }
 
   // Parse query params
   const query = getQuery(event)
@@ -50,7 +41,7 @@ export default defineEventHandler(async (event) => {
       payment_method, barber_id, points_earned, points_redeemed,
       discount_applied, created_at
     `, { count: 'exact' })
-    .eq('customer_id', user.id)
+    .eq('customer_id', authUser.id)
 
   // Apply tab filters
   if (tab === 'upcoming') {
@@ -82,41 +73,47 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Failed to fetch bookings' })
   }
 
-  // Enrich with shop name and barber name
+  // Batched enrichment: fetch all shops and barber names in 2 queries instead of per-booking N+1
   const enrichedBookings = []
-  for (const booking of (bookings || [])) {
-    const entry: any = { ...booking }
-
-    // Shop name
-    const { data: shop } = await supabase
+  if (bookings && bookings.length > 0) {
+    // Fetch all shops in one query
+    const shopIds = [...new Set(bookings.map(b => b.shop_id))]
+    const { data: shops } = await supabase
       .from('shops')
-      .select('name, slug')
-      .eq('id', booking.shop_id)
-      .single()
-    entry.shopName = shop?.name || 'Unknown Shop'
-    entry.shopSlug = shop?.slug
+      .select('id, name, slug')
+      .in('id', shopIds)
+    const shopMap = new Map((shops || []).map(s => [s.id, s]))
 
-    // Barber name
-    if (booking.barber_id) {
-      const { data: barber } = await supabase
+    // Fetch all barber display names in one batch (barbers → users join)
+    const barberIds = [...new Set(bookings.filter(b => b.barber_id).map(b => b.barber_id!))]
+    let barberNameMap = new Map<string, string>()
+    if (barberIds.length > 0) {
+      const { data: barbers } = await supabase
         .from('barbers')
-        .select('user_id')
-        .eq('id', booking.barber_id)
-        .single()
-
-      if (barber?.user_id) {
-        const { data: barberUser } = await supabase
+        .select('id, user_id')
+        .in('id', barberIds)
+      if (barbers && barbers.length > 0) {
+        const userIds = [...new Set(barbers.map(b => b.user_id))]
+        const { data: users } = await supabase
           .from('users')
-          .select('display_name')
-          .eq('id', barber.user_id)
-          .single()
-        entry.barberName = barberUser?.display_name || 'TBD'
+          .select('id, display_name')
+          .in('id', userIds)
+        const userMap = new Map((users || []).map(u => [u.id, u.display_name]))
+        for (const b of barbers) {
+          barberNameMap.set(b.id, userMap.get(b.user_id) || 'TBD')
+        }
       }
-    } else {
-      entry.barberName = 'TBD'
     }
 
-    enrichedBookings.push(entry)
+    for (const booking of bookings) {
+      const shop = shopMap.get(booking.shop_id)
+      enrichedBookings.push({
+        ...booking,
+        shopName: shop?.name || 'Unknown Shop',
+        shopSlug: shop?.slug,
+        barberName: booking.barber_id ? (barberNameMap.get(booking.barber_id) || 'TBD') : 'TBD',
+      })
+    }
   }
 
   return {

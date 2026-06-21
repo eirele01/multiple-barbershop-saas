@@ -5,14 +5,14 @@
  */
 
 useHead({
-  title: 'BarberShop SaaS — Online Booking for Barbershops in the Philippines',
+  title: 'Reservation SaaS — Online Booking for Businesses in the Philippines',
   meta: [
     {
       name: 'description',
-      content: 'Manage your barbershop with online bookings, payments, and loyalty rewards. Built for barbershops in the Philippines.',
+      content: 'Manage your business with online bookings, payments, and loyalty rewards. Built for businesses in the Philippines.',
     },
-    { property: 'og:title', content: 'BarberShop SaaS — Online Booking for Barbershops' },
-    { property: 'og:description', content: 'Manage your barbershop with online bookings, payments, and loyalty rewards.' },
+    { property: 'og:title', content: 'Reservation SaaS — Online Booking for Businesses' },
+    { property: 'og:description', content: 'Manage your business with online bookings, payments, and loyalty rewards.' },
     { property: 'og:image', content: '/og-default.png' },
     { property: 'og:type', content: 'website' },
     { name: 'twitter:card', content: 'summary_large_image' },
@@ -43,13 +43,13 @@ onMounted(async () => {
 
       <div class="relative mx-auto max-w-4xl text-center">
         <h1 class="mb-6 text-[var(--color-deep)]">
-          The Modern Barbershop
+          The Modern Reservation
           <span class="gradient-metallic bg-clip-text text-transparent">
             Management Platform
           </span>
         </h1>
         <p class="mx-auto mb-8 max-w-2xl text-lg text-[var(--color-titanium)]">
-          Launch your barbershop online in minutes. Accept bookings, manage payments,
+          Launch your business online in minutes. Accept bookings, manage payments,
           build loyalty — all in one beautiful platform.
         </p>
         <div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -73,7 +73,7 @@ onMounted(async () => {
             Are you a customer looking to book an appointment?
           </p>
           <a href="#for-customers" class="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-info)] hover:underline">
-            Find your barbershop below
+            Find your business below
             <Icon name="lucide:arrow-down" class="h-4 w-4" />
           </a>
         </div>
@@ -84,7 +84,7 @@ onMounted(async () => {
     <section id="features" class="bg-[var(--color-pure-white)] px-4 py-20">
       <div class="mx-auto max-w-6xl">
         <h2 class="mb-12 text-center text-[var(--color-deep)]">
-          Everything Your Barbershop Needs
+          Everything Your Business Needs
         </h2>
         <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           <!-- Feature cards -->
@@ -144,7 +144,7 @@ onMounted(async () => {
             </div>
             <h4 class="mb-2 text-[var(--color-deep)]">Custom Shop Page</h4>
             <p class="text-sm text-[var(--color-titanium)]">
-              A beautiful landing page for your barbershop — services, team, gallery, and reviews.
+              A beautiful landing page for your business — services, team, gallery, and reviews.
             </p>
           </div>
         </div>
@@ -163,7 +163,7 @@ onMounted(async () => {
             Booking an Appointment is Easy
           </h2>
           <p class="mx-auto max-w-xl text-[var(--color-titanium)]">
-            No app download needed. No account required to book. Just find your barbershop and book in minutes.
+            No app download needed. No account required to book. Just find your business and book in minutes.
           </p>
         </div>
 
@@ -173,9 +173,9 @@ onMounted(async () => {
             <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-deep)]/10">
               <span class="text-lg font-bold text-[var(--color-deep)]">1</span>
             </div>
-            <h4 class="mb-2 text-sm font-semibold text-[var(--color-deep)]">Visit Your Barbershop</h4>
+            <h4 class="mb-2 text-sm font-semibold text-[var(--color-deep)]">Visit Your Business</h4>
             <p class="text-xs text-[var(--color-titanium)]">
-              Each barbershop has its own page. Your barber shares the link — on Facebook, Instagram, QR code, or Viber.
+              Each business has its own page. Your service provider shares the link — on Facebook, Instagram, QR code, or Viber.
             </p>
           </div>
           <div class="card-design p-6 text-center">
@@ -202,10 +202,10 @@ onMounted(async () => {
         <div class="card-design border-2 border-dashed border-[var(--color-silver)] p-8 text-center">
           <div class="mb-4 flex items-center justify-center gap-2">
             <Icon name="lucide:search" class="h-5 w-5 text-[var(--color-titanium)]" />
-            <h4 class="text-[var(--color-deep)]">Find Your Barbershop</h4>
+            <h4 class="text-[var(--color-deep)]">Find Your Business</h4>
           </div>
           <p class="mb-5 text-sm text-[var(--color-titanium)]">
-            Search for your barbershop by name or city, then click Go to book an appointment.
+            Search for your business by name or city, then click Go to book an appointment.
           </p>
 
           <!-- Search combobox -->
@@ -360,10 +360,10 @@ onMounted(async () => {
           <div class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn">
             <Icon name="lucide:scissors" class="h-4 w-4 text-white" />
           </div>
-          <span class="text-lg font-bold text-[var(--color-deep)]">BarberShop</span>
+          <span class="text-lg font-bold text-[var(--color-deep)]">Reservation</span>
         </div>
         <p class="mt-4 text-sm text-[var(--color-titanium)]">
-          The modern barbershop management platform.
+          The modern business management platform.
         </p>
       </div>
     </footer>

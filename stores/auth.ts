@@ -98,7 +98,7 @@ export const useAuthStore = defineStore('auth', {
 
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, email, display_name, phone_number, photo_url, role, shop_id, is_active, created_at, last_login_at')
         .eq('id', userId)
         .single()
 

@@ -9,52 +9,28 @@
 import { createClient } from '@supabase/supabase-js'
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig()
-
-  // Get the authenticated user from the request
   const authHeader = getHeader(event, 'authorization')
   const token = authHeader?.replace('Bearer ', '')
+  const authUser = await verifyAuth(token || '')
 
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized — no token provided' })
-  }
-
-  const supabase = createClient(config.public.supabaseUrl as string, config.public.supabaseKey as string, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  })
-
-  // Verify the user session
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-  if (authError || !user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
-  }
-
-  // Get the user's profile and shop
-  const supabaseAdmin = createClient(config.public.supabaseUrl as string, config.supabaseServiceKey as string)
-  const { data: userProfile, error: profileError } = await supabaseAdmin
-    .from('users')
-    .select('id, role, shop_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !userProfile) {
-    throw createError({ statusCode: 403, statusMessage: 'User profile not found' })
-  }
-
-  // Role check: admin, manager, cashier, barber can view services
-  if (!['admin', 'manager', 'cashier', 'barber'].includes(userProfile.role)) {
+  if (!['admin', 'manager', 'cashier', 'barber'].includes(authUser.role)) {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
-
-  if (!userProfile.shop_id) {
+  if (!authUser.shop_id) {
     throw createError({ statusCode: 403, statusMessage: 'No shop associated with this account' })
   }
 
-  // Fetch services for this shop
-  const { data: services, error: fetchError } = await supabaseAdmin
+  const config = useRuntimeConfig()
+  const supabase = createClient(
+    config.public.supabaseUrl as string,
+    config.supabaseServiceKey as string
+  )
+
+  // Fetch services for this shop (explicit columns, no select(*))
+  const { data: services, error: fetchError } = await supabase
     .from('services')
-    .select('*')
-    .eq('shop_id', userProfile.shop_id)
+    .select('id, shop_id, name, description, category, duration_mins, price, deposit_amount, image_url, barber_ids, is_active, sort_order, created_at, updated_at')
+    .eq('shop_id', authUser.shop_id)
     .order('sort_order', { ascending: true })
 
   if (fetchError) {

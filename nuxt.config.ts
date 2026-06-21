@@ -8,10 +8,21 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
+    // Public pages — SWR with 60s stale-while-revalidate
     '/shop/**': { swr: 60 },
+    // Shop landing page API — cache for 30s since shop data changes infrequently
+    '/api/shops/[slug]': { swr: 30 },
+    // Shop listing — cache for 60s
+    '/api/shops': { swr: 60 },
+    // Availability must always be fresh
     '/api/shops/*/availability': { cache: false },
+    // Admin/super-admin — never cache authenticated data
     '/api/admin/**': { cache: false },
     '/api/super-admin/**': { cache: false },
+    // Customer API — no cache (authenticated)
+    '/api/customer/**': { cache: false },
+    // Bookings — no cache (fresh data required)
+    '/api/bookings/**': { cache: false },
   },
 
   modules: [

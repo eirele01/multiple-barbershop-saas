@@ -31,10 +31,10 @@ export default defineEventHandler(async (event) => {
     config.supabaseServiceKey as string
   )
 
-  // 1. Fetch shop details
+  // 1. Fetch shop details (explicit columns, no select(*))
   const { data: shop, error: shopError } = await supabase
     .from('shops')
-    .select('*')
+    .select('id, slug, name, description, logo_url, cover_image_url, primary_color, accent_color, font_family, email, phone, address_street, address_city, address_state, address_zip, address_country, latitude, longitude, facebook_url, instagram_url, tiktok_url, working_hours, booking_settings, timezone, is_active, plan')
     .eq('slug', slug)
     .eq('is_active', true)
     .single()

@@ -18,30 +18,17 @@ import { createClient } from '@supabase/supabase-js'
 /**
  * Extract the storage path (relative to bucket root) from a Supabase public URL
  * or return the path directly if already a storage path (not a full URL).
- *
- * Public URL format:
- *   https://{project}.supabase.co/storage/v1/object/public/payment-proofs/{path}
- *   → returns "{path}"
- *
- * Storage path format (backward compatible):
- *   payment-proofs/{shopId}/{bookingId}/{filename}
- *   → returned as-is
  */
 function extractProofStoragePath(proofUrl: string): string | null {
   if (!proofUrl) return null
-
-  // Handle full public URL — extract path after bucket name
   const marker = '/object/public/payment-proofs/'
   const idx = proofUrl.indexOf(marker)
   if (idx !== -1) {
     return proofUrl.substring(idx + marker.length).split('?')[0]
   }
-
-  // Handle storage path (already a relative path, not a URL)
   if (!proofUrl.startsWith('http')) {
     return proofUrl
   }
-
   return null
 }
 
@@ -49,103 +36,43 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const query = getQuery(event)
 
-  // Authenticate
+  // Authenticate using verifyAuth
   const authHeader = getHeader(event, 'authorization')
   const token = authHeader?.replace('Bearer ', '')
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized — no token provided' })
+  const authUser = await verifyAuth(token || '')
+
+  // Role check
+  if (!['admin', 'manager', 'cashier'].includes(authUser.role)) {
+    throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
-
-  const supabase = createClient(config.public.supabaseUrl as string, config.public.supabaseKey as string, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  })
-
-  // Verify the user token
-  const anonClient = createClient(
-    config.public.supabaseUrl as string,
-    config.public.supabaseKey as string,
-    {
-      global: {
-        headers: { Authorization: `Bearer ${token}` }
-      },
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      }
-    }
-  )
-
-  const { data: { user }, error: authError } =
-    await anonClient.auth.getUser()
-
-  if (authError || !user) {
-    throw createError({
-      statusCode: 401,
-      statusMessage: 'Invalid or expired token'
-    })
+  if (!authUser.shop_id) {
+    throw createError({ statusCode: 403, statusMessage: 'No shop associated with this account' })
   }
 
   const supabaseAdmin = createClient(
     config.public.supabaseUrl as string,
     config.supabaseServiceKey as string,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      }
-    }
+    { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
   )
 
-  // Get user profile
-  const { data: userProfile } = await supabaseAdmin
-    .from('users')
-    .select('id, role, shop_id')
-    .eq('id', user.id)
-    .single()
+  // After auth, also check for bookings with proof but no verification record
+  const missingVerifications = await supabaseAdmin
+    .from('bookings')
+    .select('*')
+    .eq('shop_id', authUser.shop_id)
+    .eq('payment_type', 'manual')
+    .eq('payment_status', 'pending_verification')
+    .not('proof_image_url', 'is', null)
+    .neq('proof_image_url', '')
 
-  if (!userProfile || !['admin', 'manager', 'cashier']
-    .includes(userProfile.role)) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Insufficient permissions'
-    })
-  }
-
-  if (!userProfile.shop_id) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'No shop associated with this account'
-    })
-  }
-
-// After the main verifications query, also check for 
-// bookings with proof but no verification record
-const { data: missingVerifications } = await supabaseAdmin
-  .from('bookings')
-  .select('*')
-  .eq('shop_id', userProfile.shop_id)
-  .eq('payment_type', 'manual')
-  .eq('payment_status', 'pending_verification')
-  .not('proof_image_url', 'is', null)
-  .neq('proof_image_url', '')
-
-// For each booking without a verification record, 
-// create one automatically
-for (const booking of missingVerifications || []) {
-  // Check if verification record already exists
-  const { data: existing } = await supabaseAdmin
-    .from('payment_verifications')
-    .select('id')
-    .eq('booking_id', booking.id)
-    .maybeSingle()
-
-  if (!existing && booking.payment_method_id) {
-    // Auto-create the missing verification record
-    await supabaseAdmin
+  for (const booking of missingVerifications.data || []) {
+    const { data: existing } = await supabaseAdmin
       .from('payment_verifications')
-      .insert({
+      .select('id')
+      .eq('booking_id', booking.id)
+      .maybeSingle()
+    if (!existing && booking.payment_method_id) {
+      await supabaseAdmin.from('payment_verifications').insert({
         shop_id: booking.shop_id,
         booking_id: booking.id,
         customer_id: booking.customer_id || null,
@@ -155,8 +82,8 @@ for (const booking of missingVerifications || []) {
         reference_number: booking.reference_number || null,
         status: 'pending',
       })
+    }
   }
-}
 
   // Build query
   const status = query.status as string | undefined
@@ -169,147 +96,113 @@ for (const booking of missingVerifications || []) {
 
   let dbQuery = supabaseAdmin
     .from('payment_verifications')
-    .select('*, bookings(booking_ref, service_name, service_price, customer_id, status, payment_status)', { count: 'exact' })
-    .eq('shop_id', userProfile.shop_id)
+    .select('*, bookings!inner(booking_ref, service_name, service_price, customer_id, status, payment_status)', { count: 'exact' })
+    .eq('shop_id', authUser.shop_id)
 
-  if (status) {
-    dbQuery = dbQuery.eq('status', status)
-  }
-  if (dateFrom) {
-    dbQuery = dbQuery.gte('created_at', dateFrom + 'T00:00:00')
-  }
-  if (dateTo) {
-    dbQuery = dbQuery.lte('created_at', dateTo + 'T23:59:59')
-  }
-  if (methodId) {
-    dbQuery = dbQuery.eq('payment_method_id', methodId)
-  }
+  if (status) dbQuery = dbQuery.eq('status', status)
+  if (dateFrom) dbQuery = dbQuery.gte('created_at', dateFrom + 'T00:00:00')
+  if (dateTo) dbQuery = dbQuery.lte('created_at', dateTo + 'T23:59:59')
+  if (methodId) dbQuery = dbQuery.eq('payment_method_id', methodId)
 
-  // Get total count for the status filter
+  // Get total count
   let countQuery = supabaseAdmin
     .from('payment_verifications')
     .select('status', { count: 'exact', head: true })
-    .eq('shop_id', userProfile.shop_id)
+    .eq('shop_id', authUser.shop_id)
+  if (dateFrom) countQuery = countQuery.gte('created_at', dateFrom + 'T00:00:00')
+  if (dateTo) countQuery = countQuery.lte('created_at', dateTo + 'T23:59:59')
+  if (methodId) countQuery = countQuery.eq('payment_method_id', methodId)
 
-  if (dateFrom) {
-    countQuery = countQuery.gte('created_at', dateFrom + 'T00:00:00')
-  }
-  if (dateTo) {
-    countQuery = countQuery.lte('created_at', dateTo + 'T23:59:59')
-  }
-  if (methodId) {
-    countQuery = countQuery.eq('payment_method_id', methodId)
-  }
+  // Fetch paginated results and count in parallel
+  const [verificationsResult, countResult] = await Promise.all([
+    dbQuery.order('created_at', { ascending: false }).range(offset, offset + limit - 1),
+    countQuery,
+  ])
 
-  const { count: totalCount } = await countQuery
-
-  // Fetch paginated results
-  const { data: verifications, error: fetchError } = await dbQuery
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1)
+  const { data: verifications, error: fetchError } = verificationsResult
+  const totalCount = countResult.count
 
   if (fetchError) {
     console.error('Error fetching verifications:', fetchError)
     throw createError({ statusCode: 500, statusMessage: 'Failed to fetch payment verifications' })
   }
 
-  // Get counts per status for tab badges
+  // Get counts per status for tab badges — also in parallel
   const { data: statusCounts } = await supabaseAdmin
     .from('payment_verifications')
     .select('status')
-    .eq('shop_id', userProfile.shop_id)
+    .eq('shop_id', authUser.shop_id)
 
-  const counts: Record<string, number> = {
-    pending: 0,
-    verified: 0,
-    rejected: 0,
-    more_info: 0,
-  }
+  const counts: Record<string, number> = { pending: 0, verified: 0, rejected: 0, more_info: 0 }
   if (statusCounts) {
     for (const row of statusCounts) {
-      if (row.status in counts) {
-        counts[row.status]++
-      }
+      if (row.status in counts) counts[row.status]++
     }
   }
 
-  // Enrich with customer and payment method info
+  // Batched enrichment: collect all IDs, fetch in 3 queries total instead of per-item N+1
   const enrichedVerifications = []
-  for (const v of verifications || []) {
-    const booking = v.bookings as any
+  if (verifications && verifications.length > 0) {
+    // Collect unique IDs for batched queries
+    const customerIds = [...new Set(verifications.map(v => v.customer_id).filter(Boolean))] as string[]
+    const paymentMethodIds = [...new Set(verifications.map(v => v.payment_method_id).filter(Boolean))] as string[]
+    const reviewerIds = [...new Set(verifications.map(v => v.reviewed_by).filter(Boolean))] as string[]
 
-    // Get customer info
-    let customerName = 'Unknown'
-    let customerPhone = ''
-    if (v.customer_id) {
-      const { data: customer } = await supabaseAdmin
-        .from('users')
-        .select('display_name, phone_number')
-        .eq('id', v.customer_id)
-        .single()
-      if (customer) {
-        customerName = customer.display_name
-        customerPhone = customer.phone_number || ''
-      }
-    }
+    // Fetch all in 3 parallel batched queries
+    const [customersResult, paymentMethodsResult, reviewersResult] = await Promise.all([
+      customerIds.length > 0
+        ? supabaseAdmin.from('users').select('id, display_name, phone_number').in('id', customerIds)
+        : Promise.resolve({ data: [] }),
+      paymentMethodIds.length > 0
+        ? supabaseAdmin.from('payment_methods').select('id, name').in('id', paymentMethodIds)
+        : Promise.resolve({ data: [] }),
+      reviewerIds.length > 0
+        ? supabaseAdmin.from('users').select('id, display_name').in('id', reviewerIds)
+        : Promise.resolve({ data: [] }),
+    ])
 
-    // Get payment method name
-    let paymentMethodName = 'Unknown'
-    if (v.reference_number?.startsWith('PayMongo')) {
-      // PayMongo payment — use the reference_number as the method name
-      paymentMethodName = v.reference_number
-    } else if (v.payment_method_id) {
-      const { data: pm } = await supabaseAdmin
-        .from('payment_methods')
-        .select('name')
-        .eq('id', v.payment_method_id)
-        .single()
-      if (pm) {
-        paymentMethodName = pm.name
-      }
-    }
+    const customerMap = new Map((customersResult.data || []).map((c: any) => [c.id, c]))
+    const pmMap = new Map((paymentMethodsResult.data || []).map((pm: any) => [pm.id, pm.name]))
+    const reviewerMap = new Map((reviewersResult.data || []).map((r: any) => [r.id, r.display_name]))
 
-    // Get reviewer name
-    let reviewedByName: string | null = null
-    if (v.reviewed_by) {
-      const { data: reviewer } = await supabaseAdmin
-        .from('users')
-        .select('display_name')
-        .eq('id', v.reviewed_by)
-        .single()
-      if (reviewer) {
-        reviewedByName = reviewer.display_name
-      }
-    }
+    for (const v of verifications) {
+      const booking = v.bookings as any
+      const customer = v.customer_id ? customerMap.get(v.customer_id) : null
 
-    // Generate signed URL for proof_image_url (private bucket)
-    let proofImageUrl = v.proof_image_url || ''
-    if (proofImageUrl) {
-      const storagePath = extractProofStoragePath(proofImageUrl)
-      if (storagePath) {
-        const { data: signedData } = await supabaseAdmin.storage
-          .from('payment-proofs')
-          .createSignedUrl(storagePath, 3600) // 1-hour expiry
-        if (signedData?.signedUrl) {
-          proofImageUrl = signedData.signedUrl
+      // Generate signed URL for proof_image_url
+      let proofImageUrl = v.proof_image_url || ''
+      if (proofImageUrl) {
+        const storagePath = extractProofStoragePath(proofImageUrl)
+        if (storagePath) {
+          const { data: signedData } = await supabaseAdmin.storage
+            .from('payment-proofs')
+            .createSignedUrl(storagePath, 3600)
+          if (signedData?.signedUrl) proofImageUrl = signedData.signedUrl
         }
       }
-    }
 
-    enrichedVerifications.push({
-      ...v,
-      bookings: undefined,
-      booking_ref: booking?.booking_ref || '',
-      service_name: booking?.service_name || '',
-      service_price: booking?.service_price || 0,
-      booking_status: booking?.status || '',
-      booking_payment_status: booking?.payment_status || '',
-      customer_name: customerName,
-      customer_phone: customerPhone,
-      payment_method_name: paymentMethodName,
-      reviewed_by_name: reviewedByName,
-      proof_image_url: proofImageUrl,
-    })
+      let paymentMethodName = 'Unknown'
+      if (v.reference_number?.startsWith('PayMongo')) {
+        paymentMethodName = v.reference_number
+      } else if (v.payment_method_id && pmMap.has(v.payment_method_id)) {
+        paymentMethodName = pmMap.get(v.payment_method_id)!
+      }
+
+      enrichedVerifications.push({
+        ...v,
+        bookings: undefined,
+        booking_ref: booking?.booking_ref || '',
+        service_name: booking?.service_name || '',
+        service_price: booking?.service_price || 0,
+        booking_status: booking?.status || '',
+        booking_payment_status: booking?.payment_status || '',
+        customer_name: customer?.display_name || 'Unknown',
+        customer_phone: customer?.phone_number || '',
+        payment_method_name: paymentMethodName,
+        reviewed_by_name: v.reviewed_by ? (reviewerMap.get(v.reviewed_by) || null) : null,
+        proof_image_url: proofImageUrl,
+      })
+    }
   }
 
   return {

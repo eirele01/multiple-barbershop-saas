@@ -9,53 +9,30 @@ import type { PlatformSettings } from '~/types/database'
 import { useSupabaseAdmin } from '../../utils/supabase'
 
 export default defineEventHandler(async (event) => {
-  const supabase = useSupabaseAdmin()
-
-  // ── Auth: verify super_admin ──
   const authHeader = getHeader(event, 'authorization')
   const token = authHeader?.replace('Bearer ', '')
-  if (!token) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-  if (authError || !user) throw createError({ statusCode: 401, statusMessage: 'Invalid token' })
-
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('id, role')
-    .eq('id', user.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== 'super_admin') {
+  const authUser = await verifyAuth(token || '')
+  if (authUser.role !== 'super_admin') {
     throw createError({ statusCode: 403, statusMessage: 'Forbidden: Super admin access required' })
   }
 
+  const supabase = useSupabaseAdmin()
+
   try {
-    // ── Shop counts ──
-    const { count: totalShops } = await supabase
-      .from('shops')
-      .select('*', { count: 'exact', head: true })
+    // ── Shop counts (all in parallel) ──
+    const [totalShopsRes, activeShopsRes, basicCountRes, upgradedCountRes, priceSettingRes] = await Promise.all([
+      supabase.from('shops').select('*', { count: 'exact', head: true }),
+      supabase.from('shops').select('*', { count: 'exact', head: true }).eq('is_active', true),
+      supabase.from('shops').select('*', { count: 'exact', head: true }).eq('plan', 'basic'),
+      supabase.from('shops').select('*', { count: 'exact', head: true }).eq('plan', 'upgraded'),
+      supabase.from('platform_settings').select('value').eq('key', 'upgraded_monthly_price').single<PlatformSettings>(),
+    ])
 
-    const { count: activeShops } = await supabase
-      .from('shops')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_active', true)
-
-    const { count: basicCount } = await supabase
-      .from('shops')
-      .select('*', { count: 'exact', head: true })
-      .eq('plan', 'basic')
-
-    const { count: upgradedCount } = await supabase
-      .from('shops')
-      .select('*', { count: 'exact', head: true })
-      .eq('plan', 'upgraded')
-
-    // ── MRR: upgradedCount * monthly price from platform_settings ──
-    const { data: priceSetting } = await supabase
-      .from('platform_settings')
-      .select('value')
-      .eq('key', 'upgraded_monthly_price')
-      .single<PlatformSettings>()
+    const totalShops = totalShopsRes.count
+    const activeShops = activeShopsRes.count
+    const basicCount = basicCountRes.count
+    const upgradedCount = upgradedCountRes.count
+    const priceSetting = priceSettingRes.data
 
     const monthlyPrice = priceSetting?.value ? parseFloat(priceSetting.value) : 499
     const mrr = (upgradedCount || 0) * monthlyPrice
