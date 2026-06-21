@@ -40,10 +40,10 @@ async function handleSignOut() {
         <div class="flex items-center gap-2">
           <NuxtLink to="/" class="flex items-center gap-2" @click="closeMobileMenu">
             <div class="gradient-metallic flex h-9 w-9 items-center justify-center rounded-btn">
-              <Icon name="lucide:scissors" class="h-5 w-5 text-white" />
+              <Icon name="lucide:calendar" class="h-5 w-5 text-white" />
             </div>
             <span class="text-lg font-bold text-[var(--color-deep)]">
-              BarberShop
+              Reservation PH
             </span>
           </NuxtLink>
         </div>

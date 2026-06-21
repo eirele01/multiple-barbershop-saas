@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * ShopSearchCombobox — A searchable dropdown for finding barbershops.
+ * ShopSearchCombobox — A searchable dropdown for finding shops.
  *
  * Behavior:
  * - On focus/click → shows dropdown with all shops (A-Z)
@@ -186,7 +186,7 @@ watch(searchQuery, (val) => {
       <input
         v-model="searchQuery"
         type="text"
-        placeholder="Search barbershops..."
+        placeholder="Search shops..."
         autocomplete="off"
         class="flex-1 border-0 bg-[var(--color-pure-white)] px-3 py-2.5 text-sm text-[var(--color-deep)] placeholder-[var(--color-silver)] focus:outline-none focus:ring-0"
         @focus="openDropdown"
@@ -291,7 +291,7 @@ watch(searchQuery, (val) => {
         class="absolute left-0 right-0 z-50 mt-1 rounded-btn border border-[var(--color-silver)]/30 bg-[var(--color-pure-white)] px-4 py-6 text-center shadow-lg"
       >
         <Icon name="lucide:search-x" class="mx-auto h-8 w-8 text-[var(--color-silver)]" />
-        <p class="mt-2 text-sm text-[var(--color-titanium)]">No barbershops found for "{{ searchQuery }}"</p>
+        <p class="mt-2 text-sm text-[var(--color-titanium)]">No shops found for "{{ searchQuery }}"</p>
         <p class="mt-1 text-xs text-[var(--color-silver)]">Try a different name or city</p>
       </div>
     </Transition>

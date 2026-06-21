@@ -22,10 +22,10 @@
       <div class="mb-8 text-center">
         <NuxtLink to="/" class="inline-flex items-center gap-2">
           <div class="gradient-metallic flex h-12 w-12 items-center justify-center rounded-btn">
-            <Icon name="lucide:scissors" class="h-6 w-6 text-white" />
+            <Icon name="lucide:calendar" class="h-6 w-6 text-white" />
           </div>
           <span class="text-2xl font-bold text-[var(--color-deep)]">
-            BarberShop
+            Reservation PH
           </span>
         </NuxtLink>
       </div>
