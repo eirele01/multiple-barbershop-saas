@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   // 1. Fetch shop details (explicit columns, no select(*))
   const { data: shop, error: shopError } = await supabase
     .from('shops')
-    .select('id, slug, name, description, logo_url, cover_image_url, primary_color, accent_color, font_family, email, phone, address_street, address_city, address_state, address_zip, address_country, latitude, longitude, facebook_url, instagram_url, tiktok_url, working_hours, booking_settings, timezone, is_active, plan')
+    .select('id, slug, name, description, logo_url, cover_image_url, primary_color, accent_color, font_family, email, phone, address_street, address_city, address_state, address_zip, address_country, latitude, longitude, facebook_url, instagram_url, tiktok_url, working_hours, booking_settings, timezone, is_active, plan, paymongo_enabled, manual_payment_enabled, gcash_enabled, maya_enabled, instapay_enabled, qr_ph_enabled, loyalty_enabled, loyalty_earn_rate, loyalty_earn_base, loyalty_tiers, loyalty_tiers_enabled')
     .eq('slug', slug)
     .eq('is_active', true)
     .single()

@@ -95,6 +95,7 @@ async function fetchBookings() {
     if (bookings.value.length > 0) {
       const customerIds = [...new Set(bookings.value.map(b => b.customer_id).filter(Boolean))]
       const barberIds = [...new Set(bookings.value.map(b => b.barber_id).filter(Boolean))]
+      const manualPaymentMethodIds = [...new Set(bookings.value.map(b => b.payment_method_id).filter(Boolean))]
 
       // Fetch customer names
       if (customerIds.length > 0) {
@@ -137,6 +138,38 @@ async function fetchBookings() {
               }
             }
           }
+        }
+      }
+
+      // Resolve payment method names for manual payments
+      if (manualPaymentMethodIds.length > 0) {
+        const { data: paymentMethods } = await supabase
+          .from('payment_methods')
+          .select('id, name')
+          .in('id', manualPaymentMethodIds)
+
+        if (paymentMethods) {
+          const pmMap = Object.fromEntries(paymentMethods.map(pm => [pm.id, pm.name]))
+          for (const booking of bookings.value) {
+            if (booking.payment_method_id && pmMap[booking.payment_method_id]) {
+              booking.paymentMethodName = pmMap[booking.payment_method_id]
+            }
+          }
+        }
+      }
+
+      // Format PayMongo method keys into readable names
+      const paymongoLabelMap: Record<string, string> = {
+        gcash_paymongo: 'GCash',
+        maya_paymongo: 'Maya',
+        instapay: 'InstaPay',
+        qrph: 'QR PH',
+      }
+      for (const booking of bookings.value) {
+        if (booking.payment_type === 'paymongo' && booking.payment_method) {
+          booking.paymentMethodName = paymongoLabelMap[booking.payment_method] || booking.payment_method
+        } else if (!booking.paymentMethodName) {
+          booking.paymentMethodName = booking.payment_type === 'paymongo' ? 'PayMongo' : 'Manual QR'
         }
       }
     }
@@ -367,6 +400,7 @@ onMounted(() => {
               </td>
               <td class="px-4 py-3 text-center">
                 <StatusBadge :status="booking.payment_status" size="sm" />
+                <p class="mt-1 text-xs text-[var(--color-titanium)]">{{ booking.paymentMethodName || '—' }}</p>
               </td>
               <td class="px-4 py-3 text-right font-medium text-[var(--color-deep)]">
                 {{ formatPrice(booking.payment_amount || booking.service_price) }}

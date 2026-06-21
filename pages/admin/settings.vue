@@ -3,14 +3,8 @@
  * Admin Settings — Payment & Email Tabs
  * Route: /admin/settings
  *
- * Phase 5+6: PayMongo Integration + Email Notification System
- *
  * Tab 1 — Payment: PayMongo settings (Upgraded only) + Manual QR
- * Tab 2 — Email: Resend API settings (Upgraded only)
- *
- * Permissions:
- *   Admin: full access to all settings
- *   Manager/Cashier/Barber: limited read-only access
+ * Tab 2 — Email: Email notification toggles (Resend config is platform-level)
  */
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
@@ -60,21 +54,11 @@ const encryptionConfigured = ref(true)
 const isEmailLoading = ref(true)
 const emailLoadError = ref(false)
 const isEmailSaving = ref(false)
-const isTestingResend = ref(false)
-const resendTestResult = ref<{ sent: boolean; error?: string; email?: string } | null>(null)
 
-const resendApiKey = ref('')
-const senderEmail = ref('')
-const senderName = ref('')
 const emailConfirmation = ref(true)
 const emailReminder = ref(true)
 const reminderHoursFirst = ref(24)
 const reminderHoursSecond = ref(2)
-
-const hasResendKeySaved = ref(false)
-const resendKeyDirty = ref(false)
-const showResendKey = ref(false)
-const shopOwnerEmail = ref('')
 
 // ─── Computed ────────────────────────────────────────
 const isAdmin = computed(() => authStore.role === 'admin')
@@ -89,14 +73,8 @@ const atLeastOnePaymentMethod = computed(() =>
   paymongoEnabled.value || manualPaymentEnabled.value
 )
 
-const canTestConnection = computed(() => {
-  const result = hasSecretKeySaved.value || (secretKeyDirty.value && paymongoSecretKey.value.trim() !== '')
-  console.log('[canTestConnection] Computed:', { hasSecretKeySaved: hasSecretKeySaved.value, secretKeyDirty: secretKeyDirty.value, keyLength: paymongoSecretKey.value.trim().length, result })
-  return result
-})
-
-const canTestResend = computed(() =>
-  hasResendKeySaved.value || (resendKeyDirty.value && resendApiKey.value.trim() !== '')
+const canTestConnection = computed(() =>
+  hasSecretKeySaved.value || (secretKeyDirty.value && paymongoSecretKey.value.trim() !== '')
 )
 
 // ─── Helper: Get auth token ─────────────────────────
@@ -166,23 +144,14 @@ async function fetchEmailSettings() {
       headers: { Authorization: `Bearer ${token}` },
     }) as any
 
-    // Update shopPlan if email route returns it (may be different from payment load)
     if (response.plan) shopPlan.value = response.plan
 
-    hasResendKeySaved.value = !!response.resend_api_key
-    resendApiKey.value = ''
-    senderEmail.value = response.sender_email || ''
-    senderName.value = response.sender_name || ''
     emailConfirmation.value = response.email_confirmation ?? true
     emailReminder.value = response.email_reminder ?? true
 
     const hours = response.reminder_hours || [24, 2]
     reminderHoursFirst.value = hours[0] || 24
     reminderHoursSecond.value = hours[1] || 2
-
-    shopOwnerEmail.value = response.shop_owner_email || ''
-
-    resendKeyDirty.value = false
   } catch (error: any) {
     emailLoadError.value = true
     toast.error('Failed to load email settings')
@@ -194,28 +163,17 @@ async function fetchEmailSettings() {
 
 // ─── Test PayMongo Connection ────────────────────────
 async function testConnection() {
-  console.log('[testConnection] Button clicked!')
-  console.log('[testConnection] secretKeyDirty:', secretKeyDirty.value)
-  console.log('[testConnection] paymongoSecretKey:', `"${paymongoSecretKey.value}"`)
-  console.log('[testConnection] hasSecretKeySaved:', hasSecretKeySaved.value)
-  console.log('[testConnection] canTestConnection result:', canTestConnection.value)
-
   isTestingConnection.value = true
   testResult.value = null
   try {
     const token = getAuthToken()
     if (!token) {
-      console.log('[testConnection] No auth token')
       testResult.value = { valid: false, error: 'Not authenticated — please log in again' }
       return
     }
-    console.log('[testConnection] Got auth token, sending API request...')
 
-    // If user has typed a new unsaved key, test THAT key instead of the saved one
     const useUnsavedKey = secretKeyDirty.value && paymongoSecretKey.value.trim() !== ''
-    console.log('[testConnection] useUnsavedKey:', useUnsavedKey)
 
-    console.log('[testConnection] Calling /api/admin/settings/test-paymongo...')
     const response = await $fetch('/api/admin/settings/test-paymongo', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -223,69 +181,32 @@ async function testConnection() {
         ? { useUnsavedKey: true, secretKey: paymongoSecretKey.value.trim() }
         : {},
     }) as any
-    console.log('[testConnection] API response received:', response)
 
     testResult.value = { valid: response.valid, error: response.error }
   } catch (error: any) {
-    console.log('[testConnection] Error caught:', error)
     const serverMessage = error?.data?.statusMessage || error?.message || 'Connection test failed'
     testResult.value = { valid: false, error: serverMessage }
   } finally {
     isTestingConnection.value = false
-    console.log('[testConnection] Finished (isTestingConnection set to false)')
-  }
-}
-
-// ─── Test Resend Connection ──────────────────────────
-async function testResendConnection() {
-  isTestingResend.value = true
-  resendTestResult.value = null
-  try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    const response = await $fetch('/api/admin/settings/test-resend', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
-
-    resendTestResult.value = { sent: response.sent, error: response.error, email: response.email }
-  } catch (error: any) {
-    resendTestResult.value = { sent: false, error: 'Test email failed' }
-  } finally {
-    isTestingResend.value = false
   }
 }
 
 // ─── Save Payment Settings ──────────────────────────
 async function savePaymentSettings() {
-  console.log('[savePaymentSettings] Button clicked!')
-
   if (isUpgradedPlan.value && !paymongoEnabled.value && !manualPaymentEnabled.value) {
-    console.log('[savePaymentSettings] Validation failed: no payment method enabled')
     toast.error('At least one payment method must be enabled.')
     return
   }
 
   if (paymongoEnabled.value && !atLeastOnePayMongoMethod.value) {
-    console.log('[savePaymentSettings] Validation failed: no PayMongo method')
     toast.error('At least one PayMongo payment method must be enabled when PayMongo is active.')
     return
   }
 
   isPaymentSaving.value = true
-  console.log('[savePaymentSettings] isPaymentSaving set to true')
-
   try {
     const token = getAuthToken()
-    if (!token) {
-      console.log('[savePaymentSettings] No auth token — aborting')
-      isPaymentSaving.value = false
-      return
-    }
-    console.log('[savePaymentSettings] Got auth token')
+    if (!token) return
 
     const payload: Record<string, any> = {
       paymongo_enabled: paymongoEnabled.value,
@@ -300,30 +221,22 @@ async function savePaymentSettings() {
 
     if (secretKeyDirty.value && paymongoSecretKey.value.trim()) {
       payload.paymongo_secret_key = paymongoSecretKey.value.trim()
-      console.log('[savePaymentSettings] Including secret key in payload')
     }
 
     if (webhookSecretDirty.value && paymongoWebhookSecret.value.trim()) {
       payload.paymongo_webhook_secret = paymongoWebhookSecret.value.trim()
-      console.log('[savePaymentSettings] Including webhook secret in payload')
     }
 
-    console.log('[savePaymentSettings] Sending PATCH /api/admin/settings/payment...', { ...payload, paymongo_secret_key: payload.paymongo_secret_key ? '[REDACTED]' : undefined })
     const response = await $fetch('/api/admin/settings/payment', {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` },
       body: payload,
     }) as any
-    console.log('[savePaymentSettings] API response received:', response)
 
     toast.success('Payment settings saved successfully')
 
-    if (secretKeyDirty.value && paymongoSecretKey.value.trim()) {
-      hasSecretKeySaved.value = true
-    }
-    if (webhookSecretDirty.value && paymongoWebhookSecret.value.trim()) {
-      hasWebhookSecretSaved.value = true
-    }
+    if (secretKeyDirty.value && paymongoSecretKey.value.trim()) hasSecretKeySaved.value = true
+    if (webhookSecretDirty.value && paymongoWebhookSecret.value.trim()) hasWebhookSecretSaved.value = true
 
     secretKeyDirty.value = false
     webhookSecretDirty.value = false
@@ -331,8 +244,6 @@ async function savePaymentSettings() {
     paymongoWebhookSecret.value = ''
     testResult.value = null
 
-    // Refresh payment settings from the just-saved data
-    // (skip shopStore.loadCurrentShop() to avoid hanging on Supabase client)
     if (response.paymongo_enabled !== undefined) paymongoEnabled.value = response.paymongo_enabled
     if (response.manual_payment_enabled !== undefined) manualPaymentEnabled.value = response.manual_payment_enabled
     if (response.hasOwnProperty('paymongo_public_key')) paymongoPublicKey.value = response.paymongo_public_key || ''
@@ -361,34 +272,17 @@ async function saveEmailSettings() {
     const token = session?.access_token
     if (!token) return
 
-    const payload: Record<string, any> = {
-      sender_email: senderEmail.value || null,
-      sender_name: senderName.value || null,
-      email_confirmation: emailConfirmation.value,
-      email_reminder: emailReminder.value,
-      reminder_hours: [reminderHoursFirst.value, reminderHoursSecond.value].filter(h => h > 0),
-    }
-
-    if (resendKeyDirty.value && resendApiKey.value.trim()) {
-      payload.resend_api_key = resendApiKey.value.trim()
-    }
-
     await $fetch('/api/admin/settings/email', {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` },
-      body: payload,
+      body: {
+        email_confirmation: emailConfirmation.value,
+        email_reminder: emailReminder.value,
+        reminder_hours: [reminderHoursFirst.value, reminderHoursSecond.value].filter(h => h > 0),
+      },
     })
 
     toast.success('Email settings saved successfully')
-
-    if (resendKeyDirty.value && resendApiKey.value.trim()) {
-      hasResendKeySaved.value = true
-    }
-
-    resendKeyDirty.value = false
-    resendApiKey.value = ''
-    resendTestResult.value = null
-
     await shopStore.loadCurrentShop()
   } catch (error: any) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to save email settings'
@@ -483,9 +377,7 @@ onMounted(() => {
       <div v-else-if="paymentLoadError" class="card-design p-8 text-center">
         <Icon name="lucide:alert-circle" class="mx-auto mb-3 h-12 w-12 text-[var(--color-danger)]" />
         <h3 class="mb-2 text-lg font-semibold text-[var(--color-deep)]">Failed to Load Payment Settings</h3>
-        <p class="mb-4 text-sm text-[var(--color-titanium)]">
-          Something went wrong while fetching your payment settings. Please try again.
-        </p>
+        <p class="mb-4 text-sm text-[var(--color-titanium)]">Something went wrong while fetching your payment settings. Please try again.</p>
         <button
           class="btn-design bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-titanium)]"
           @click="fetchPaymentSettings"
@@ -497,7 +389,6 @@ onMounted(() => {
 
       <!-- Payment Settings Content -->
       <div v-else class="space-y-6">
-
         <!-- Encryption Not Configured Warning -->
         <div v-if="!encryptionConfigured" class="rounded-input bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/20 p-4">
           <div class="flex items-start gap-3">
@@ -505,8 +396,8 @@ onMounted(() => {
             <div>
               <p class="font-medium text-[var(--color-danger)]">Encryption Key Not Configured</p>
               <p class="mt-1 text-sm text-[var(--color-titanium)]">
-                The <code class="rounded bg-[var(--color-silver)]/20 px-1">NUXT_ENCRYPTION_KEY</code> environment variable is missing or invalid. 
-                Secret keys (PayMongo secret key, webhook secret) cannot be saved. 
+                The <code class="rounded bg-[var(--color-silver)]/20 px-1">NUXT_ENCRYPTION_KEY</code> environment variable is missing or invalid.
+                Secret keys (PayMongo secret key, webhook secret) cannot be saved.
                 Add it to your <code class="rounded bg-[var(--color-silver)]/20 px-1">.env</code> file and restart the server.
               </p>
               <p class="mt-2 text-xs text-[var(--color-titanium)]">
@@ -532,21 +423,15 @@ onMounted(() => {
           <div v-if="isBasicPlan" class="rounded-input bg-[var(--color-info)]/5 border border-[var(--color-info)]/20 p-6 text-center">
             <Icon name="lucide:lock" class="mx-auto mb-3 h-10 w-10 text-[var(--color-info)]" />
             <h3 class="mb-2 text-lg font-semibold text-[var(--color-deep)]">Upgrade to Enable PayMongo</h3>
-            <p class="mb-4 text-sm text-[var(--color-titanium)]">
-              PayMongo integration is available on the Upgraded plan. Accept online payments via GCash, Maya, InstaPay, and QR PH automatically — no manual verification needed.
-            </p>
-            <button class="btn-design bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-titanium)]">
-              Upgrade Plan
-            </button>
+            <p class="mb-4 text-sm text-[var(--color-titanium)]">PayMongo integration is available on the Upgraded plan.</p>
+            <button class="btn-design bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-titanium)]">Upgrade Plan</button>
           </div>
 
           <!-- Manager/Cashier/Barber — Access Denied -->
           <div v-else-if="!isAdmin" class="rounded-input bg-[var(--color-silver)]/10 border border-[var(--color-silver)]/30 p-6 text-center">
             <Icon name="lucide:shield" class="mx-auto mb-3 h-10 w-10 text-[var(--color-titanium)]" />
             <h3 class="mb-2 text-lg font-semibold text-[var(--color-deep)]">Admin Access Required</h3>
-            <p class="text-sm text-[var(--color-titanium)]">
-              PayMongo settings can only be configured by the shop admin. Contact your admin to update payment integration settings.
-            </p>
+            <p class="text-sm text-[var(--color-titanium)]">PayMongo settings can only be configured by the shop admin.</p>
           </div>
 
           <!-- Upgraded Plan — Full PayMongo Settings -->
@@ -562,16 +447,12 @@ onMounted(() => {
                 :class="paymongoEnabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'"
                 @click="paymongoEnabled = !paymongoEnabled"
               >
-                <span
-                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
-                  :class="paymongoEnabled ? 'translate-x-6' : 'translate-x-1'"
-                />
+                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="paymongoEnabled ? 'translate-x-6' : 'translate-x-1'" />
               </button>
             </div>
 
             <!-- PayMongo Detail Settings (only if enabled) -->
             <div v-if="paymongoEnabled" class="space-y-5">
-
               <!-- Test Mode Toggle -->
               <div class="rounded-input bg-[var(--color-white)] p-4">
                 <div class="flex items-center justify-between">
@@ -584,77 +465,42 @@ onMounted(() => {
                     :class="paymongoTestMode ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-danger)]'"
                     @click="paymongoTestMode = !paymongoTestMode"
                   >
-                    <span
-                      class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
-                      :class="paymongoTestMode ? 'translate-x-6' : 'translate-x-1'"
-                    />
+                    <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="paymongoTestMode ? 'translate-x-6' : 'translate-x-1'" />
                   </button>
                 </div>
                 <div v-if="!paymongoTestMode" class="mt-3 flex items-center gap-2 rounded-input bg-[var(--color-danger)]/10 px-3 py-2 text-sm text-[var(--color-danger)]">
-                  <Icon name="lucide:alert-triangle" class="h-4 w-4 shrink-0" />
-                  <span>Live Mode — Real payments will be charged</span>
+                  <Icon name="lucide:alert-triangle" class="h-4 w-4 shrink-0" /> Live Mode — Real payments will be charged
                 </div>
               </div>
 
               <!-- Public Key -->
               <div>
                 <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">PayMongo Public Key</label>
-                <input
-                  v-model="paymongoPublicKey"
-                  type="text"
-                  placeholder="pk_test_xxx"
-                  class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
-                />
+                <input v-model="paymongoPublicKey" type="text" placeholder="pk_test_xxx" class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20" />
               </div>
 
               <!-- Secret Key -->
               <div>
                 <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">PayMongo Secret Key</label>
                 <div class="relative">
-                  <input
-                    v-model="paymongoSecretKey"
-                    :type="showSecretKey ? 'text' : 'password'"
-                    :placeholder="hasSecretKeySaved ? 'sk_live_***...*** (saved — click to change)' : 'sk_test_xxx'"
-                    class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 pr-10 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
-                    @input="secretKeyDirty = true"
-                  />
-                  <button
-                    type="button"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]"
-                    @click="showSecretKey = !showSecretKey"
-                  >
+                  <input v-model="paymongoSecretKey" :type="showSecretKey ? 'text' : 'password'" :placeholder="hasSecretKeySaved ? 'sk_live_***...*** (saved — click to change)' : 'sk_test_xxx'" class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 pr-10 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20" @input="secretKeyDirty = true" />
+                  <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]" @click="showSecretKey = !showSecretKey">
                     <Icon :name="showSecretKey ? 'lucide:eye-off' : 'lucide:eye'" class="h-4 w-4" />
                   </button>
                 </div>
-                <p class="mt-1 text-xs text-[var(--color-titanium)]">
-                  {{ hasSecretKeySaved && !secretKeyDirty
-                      ? 'A secret key is already saved. Enter a new one to update.'
-                      : secretKeyDirty
-                        ? 'Enter a new secret key to update.'
-                        : 'No secret key configured yet.' }}
-                </p>
+                <p class="mt-1 text-xs text-[var(--color-titanium)]">{{ hasSecretKeySaved && !secretKeyDirty ? 'A secret key is already saved. Enter a new one to update.' : secretKeyDirty ? 'Enter a new secret key to update.' : 'No secret key configured yet.' }}</p>
               </div>
 
               <!-- Test Connection -->
               <div class="flex items-center gap-3">
-                <button
-                  class="btn-design flex items-center gap-2 rounded-btn border border-[var(--color-info)] px-4 py-2 text-sm font-medium text-[var(--color-info)] transition-colors hover:bg-[var(--color-info)]/10 disabled:cursor-not-allowed disabled:opacity-50"
-                  :disabled="isTestingConnection || !canTestConnection"
-                  @click="testConnection"
-                >
+                <button class="btn-design flex items-center gap-2 rounded-btn border border-[var(--color-info)] px-4 py-2 text-sm font-medium text-[var(--color-info)] transition-colors hover:bg-[var(--color-info)]/10 disabled:cursor-not-allowed disabled:opacity-50" :disabled="isTestingConnection || !canTestConnection" @click="testConnection">
                   <Icon v-if="isTestingConnection" name="lucide:loader-2" class="h-4 w-4 animate-spin" />
                   <Icon v-else name="lucide:plug" class="h-4 w-4" />
                   Test Connection
                 </button>
                 <div v-if="testResult" class="flex items-center gap-1.5 text-sm">
-                  <template v-if="testResult.valid">
-                    <Icon name="lucide:check-circle" class="h-4 w-4 text-[var(--color-success)]" />
-                    <span class="text-[var(--color-success)]">Connected successfully</span>
-                  </template>
-                  <template v-else>
-                    <Icon name="lucide:x-circle" class="h-4 w-4 text-[var(--color-danger)]" />
-                    <span class="text-[var(--color-danger)]">{{ testResult.error || 'Invalid key — check your PayMongo dashboard' }}</span>
-                  </template>
+                  <template v-if="testResult.valid"><Icon name="lucide:check-circle" class="h-4 w-4 text-[var(--color-success)]" /><span class="text-[var(--color-success)]">Connected successfully</span></template>
+                  <template v-else><Icon name="lucide:x-circle" class="h-4 w-4 text-[var(--color-danger)]" /><span class="text-[var(--color-danger)]">{{ testResult.error || 'Invalid key — check your PayMongo dashboard' }}</span></template>
                 </div>
               </div>
 
@@ -663,189 +509,69 @@ onMounted(() => {
                 <label class="mb-2 block text-sm font-medium text-[var(--color-deep)]">Payment Methods</label>
                 <p class="mb-3 text-xs text-[var(--color-titanium)]">Select which PayMongo payment methods to offer. At least one must be enabled.</p>
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <label
-                    class="flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors cursor-pointer"
-                    :class="gcashEnabled
-                      ? 'border-[var(--color-success)] bg-[var(--color-success)]/5 text-[var(--color-deep)]'
-                      : 'border-[var(--color-silver)]/50 bg-[var(--color-white)] text-[var(--color-titanium)]'"
-                  >
-                    <input type="checkbox" v-model="gcashEnabled" class="h-4 w-4 rounded accent-[var(--color-success)]" />
-                    <span class="font-medium">GCash</span>
+                  <label class="flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors cursor-pointer" :class="gcashEnabled ? 'border-[var(--color-success)] bg-[var(--color-success)]/5 text-[var(--color-deep)]' : 'border-[var(--color-silver)]/50 bg-[var(--color-white)] text-[var(--color-titanium)]'">
+                    <input type="checkbox" v-model="gcashEnabled" class="h-4 w-4 rounded accent-[var(--color-success)]" /><span class="font-medium">GCash</span>
                   </label>
-                  <label
-                    class="flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors cursor-pointer"
-                    :class="mayaEnabled
-                      ? 'border-[var(--color-success)] bg-[var(--color-success)]/5 text-[var(--color-deep)]'
-                      : 'border-[var(--color-silver)]/50 bg-[var(--color-white)] text-[var(--color-titanium)]'"
-                  >
-                    <input type="checkbox" v-model="mayaEnabled" class="h-4 w-4 rounded accent-[var(--color-success)]" />
-                    <span class="font-medium">Maya</span>
+                  <label class="flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors cursor-pointer" :class="mayaEnabled ? 'border-[var(--color-success)] bg-[var(--color-success)]/5 text-[var(--color-deep)]' : 'border-[var(--color-silver)]/50 bg-[var(--color-white)] text-[var(--color-titanium)]'">
+                    <input type="checkbox" v-model="mayaEnabled" class="h-4 w-4 rounded accent-[var(--color-success)]" /><span class="font-medium">Maya</span>
                   </label>
-                  <label
-                    class="flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors cursor-pointer"
-                    :class="instapayEnabled
-                      ? 'border-[var(--color-success)] bg-[var(--color-success)]/5 text-[var(--color-deep)]'
-                      : 'border-[var(--color-silver)]/50 bg-[var(--color-white)] text-[var(--color-titanium)]'"
-                  >
-                    <input type="checkbox" v-model="instapayEnabled" class="h-4 w-4 rounded accent-[var(--color-success)]" />
-                    <span class="font-medium">InstaPay</span>
+                  <label class="flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors cursor-pointer" :class="instapayEnabled ? 'border-[var(--color-success)] bg-[var(--color-success)]/5 text-[var(--color-deep)]' : 'border-[var(--color-silver)]/50 bg-[var(--color-white)] text-[var(--color-titanium)]'">
+                    <input type="checkbox" v-model="instapayEnabled" class="h-4 w-4 rounded accent-[var(--color-success)]" /><span class="font-medium">InstaPay</span>
                   </label>
-                  <label
-                    class="flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors cursor-pointer"
-                    :class="qrPhEnabled
-                      ? 'border-[var(--color-success)] bg-[var(--color-success)]/5 text-[var(--color-deep)]'
-                      : 'border-[var(--color-silver)]/50 bg-[var(--color-white)] text-[var(--color-titanium)]'"
-                  >
-                    <input type="checkbox" v-model="qrPhEnabled" class="h-4 w-4 rounded accent-[var(--color-success)]" />
-                    <span class="font-medium">QR PH</span>
+                  <label class="flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors cursor-pointer" :class="qrPhEnabled ? 'border-[var(--color-success)] bg-[var(--color-success)]/5 text-[var(--color-deep)]' : 'border-[var(--color-silver)]/50 bg-[var(--color-white)] text-[var(--color-titanium)]'">
+                    <input type="checkbox" v-model="qrPhEnabled" class="h-4 w-4 rounded accent-[var(--color-success)]" /><span class="font-medium">QR PH</span>
                   </label>
                 </div>
-                <p v-if="!atLeastOnePayMongoMethod" class="mt-2 text-xs text-[var(--color-danger)]">
-                  At least one payment method must be checked when PayMongo is enabled.
-                </p>
               </div>
 
               <!-- Webhook URL -->
               <div>
                 <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Webhook URL</label>
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <input
-                    :value="webhookUrl"
-                    type="text"
-                    readonly
-                    class="input-design flex-1 border border-[var(--color-silver)]/50 bg-[var(--color-white)] px-4 py-2.5 text-sm text-[var(--color-titanium)] outline-none"
-                  />
-                  <button
-                    class="btn-design flex items-center justify-center gap-1.5 rounded-btn border border-[var(--color-silver)] px-3 py-2.5 text-sm font-medium text-[var(--color-deep)] transition-colors hover:bg-[var(--color-silver)]/20"
-                    @click="copyWebhookUrl"
-                  >
-                    <Icon name="lucide:copy" class="h-4 w-4" />
-                    Copy
-                  </button>
+                  <input :value="webhookUrl" type="text" readonly class="input-design flex-1 border border-[var(--color-silver)]/50 bg-[var(--color-white)] px-4 py-2.5 text-sm text-[var(--color-titanium)] outline-none" />
+                  <button class="btn-design flex items-center justify-center gap-1.5 rounded-btn border border-[var(--color-silver)] px-3 py-2.5 text-sm font-medium text-[var(--color-deep)] transition-colors hover:bg-[var(--color-silver)]/20" @click="copyWebhookUrl"><Icon name="lucide:copy" class="h-4 w-4" /> Copy</button>
                 </div>
-                <p class="mt-1.5 text-xs text-[var(--color-titanium)]">
-                  Add this URL in <strong>PayMongo Dashboard &rarr; Developers &rarr; Webhooks</strong>. Subscribe to: <code class="rounded bg-[var(--color-silver)]/20 px-1">payment.paid</code> and <code class="rounded bg-[var(--color-silver)]/20 px-1">payment.failed</code>
-                </p>
+                <p class="mt-1.5 text-xs text-[var(--color-titanium)]">Add this URL in <strong>PayMongo Dashboard &rarr; Developers &rarr; Webhooks</strong>. Subscribe to: <code class="rounded bg-[var(--color-silver)]/20 px-1">payment.paid</code> and <code class="rounded bg-[var(--color-silver)]/20 px-1">payment.failed</code></p>
               </div>
 
               <!-- Webhook Secret -->
               <div>
                 <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Webhook Secret</label>
                 <div class="relative">
-                  <input
-                    v-model="paymongoWebhookSecret"
-                    :type="showWebhookSecret ? 'text' : 'password'"
-                    :placeholder="hasWebhookSecretSaved ? 'whsec_*** (saved — click to change)' : 'whsec_xxx'"
-                    class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 pr-10 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
-                    @input="webhookSecretDirty = true"
-                  />
-                  <button
-                    type="button"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]"
-                    @click="showWebhookSecret = !showWebhookSecret"
-                  >
-                    <Icon :name="showWebhookSecret ? 'lucide:eye-off' : 'lucide:eye'" class="h-4 w-4" />
-                  </button>
+                  <input v-model="paymongoWebhookSecret" :type="showWebhookSecret ? 'text' : 'password'" :placeholder="hasWebhookSecretSaved ? 'whsec_*** (saved — click to change)' : 'whsec_xxx'" class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 pr-10 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20" @input="webhookSecretDirty = true" />
+                  <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]" @click="showWebhookSecret = !showWebhookSecret"><Icon :name="showWebhookSecret ? 'lucide:eye-off' : 'lucide:eye'" class="h-4 w-4" /></button>
                 </div>
-                <p class="mt-1 text-xs text-[var(--color-titanium)]">
-                  {{ hasWebhookSecretSaved && !webhookSecretDirty
-                      ? 'A webhook secret is already saved. Enter a new one to update.'
-                      : webhookSecretDirty
-                        ? 'Enter a new webhook secret to update.'
-                        : 'No webhook secret configured yet.' }}
-                </p>
+                <p class="mt-1 text-xs text-[var(--color-titanium)]">{{ hasWebhookSecretSaved && !webhookSecretDirty ? 'A webhook secret is already saved. Enter a new one to update.' : webhookSecretDirty ? 'Enter a new webhook secret to update.' : 'No webhook secret configured yet.' }}</p>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- SECTION B — Manual QR Payment (always visible) -->
+        <!-- SECTION B — Manual QR Payment -->
         <div class="card-design p-6">
           <div class="mb-4 flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-btn bg-[var(--color-warning)]/10">
-              <Icon name="lucide:qr-code" class="h-5 w-5 text-[var(--color-warning)]" />
-            </div>
-            <div>
-              <h2 class="text-lg font-semibold text-[var(--color-deep)]">Manual QR Payment</h2>
-              <p class="text-sm text-[var(--color-titanium)]">Customers send payment proof for manual verification</p>
-            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-btn bg-[var(--color-warning)]/10"><Icon name="lucide:qr-code" class="h-5 w-5 text-[var(--color-warning)]" /></div>
+            <div><h2 class="text-lg font-semibold text-[var(--color-deep)]">Manual QR Payment</h2><p class="text-sm text-[var(--color-titanium)]">Customers send payment proof for manual verification</p></div>
           </div>
 
-          <!-- Basic Plan: always on, can't toggle -->
           <div v-if="isBasicPlan" class="space-y-3">
             <div class="flex items-center justify-between rounded-input bg-[var(--color-white)] p-4">
-              <div>
-                <p class="font-medium text-[var(--color-deep)]">Enable Manual QR</p>
-                <p class="text-sm text-[var(--color-titanium)]">Manual QR is always enabled on the Basic plan.</p>
-              </div>
-              <button
-                class="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed items-center rounded-full bg-[var(--color-success)] opacity-60"
-                disabled
-              >
-                <span class="inline-block h-4 w-4 translate-x-6 transform rounded-full bg-white" />
-              </button>
+              <div><p class="font-medium text-[var(--color-deep)]">Enable Manual QR</p><p class="text-sm text-[var(--color-titanium)]">Manual QR is always enabled on the Basic plan.</p></div>
+              <button class="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed items-center rounded-full bg-[var(--color-success)] opacity-60" disabled><span class="inline-block h-4 w-4 translate-x-6 transform rounded-full bg-white" /></button>
             </div>
-            <div class="flex items-center gap-2 rounded-input bg-[var(--color-info)]/5 border border-[var(--color-info)]/20 px-3 py-2 text-xs text-[var(--color-info)]">
-              <Icon name="lucide:info" class="h-4 w-4 shrink-0" />
-              <span>Manual QR is always enabled on the Basic plan. Upgrade to disable it.</span>
-            </div>
+            <div class="flex items-center gap-2 rounded-input bg-[var(--color-info)]/5 border border-[var(--color-info)]/20 px-3 py-2 text-xs text-[var(--color-info)]"><Icon name="lucide:info" class="h-4 w-4 shrink-0" /><span>Manual QR is always enabled on the Basic plan. Upgrade to disable it.</span></div>
           </div>
-
-          <!-- Upgraded Plan: can toggle -->
           <div v-else class="space-y-3">
             <div class="flex items-center justify-between rounded-input bg-[var(--color-white)] p-4">
-              <div>
-                <p class="font-medium text-[var(--color-deep)]">Enable Manual QR</p>
-                <p class="text-sm text-[var(--color-titanium)]">Allow customers to pay by sending QR payment proof</p>
-              </div>
-              <button
-                v-if="isAdmin"
-                class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
-                :class="manualPaymentEnabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'"
-                @click="manualPaymentEnabled = !manualPaymentEnabled"
-              >
-                <span
-                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
-                  :class="manualPaymentEnabled ? 'translate-x-6' : 'translate-x-1'"
-                />
-              </button>
-              <button
-                v-else
-                class="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed items-center rounded-full"
-                :class="manualPaymentEnabled ? 'bg-[var(--color-success)] opacity-60' : 'bg-[var(--color-silver)]'"
-                disabled
-              >
-                <span
-                  class="inline-block h-4 w-4 transform rounded-full bg-white"
-                  :class="manualPaymentEnabled ? 'translate-x-6' : 'translate-x-1'"
-                />
-              </button>
+              <div><p class="font-medium text-[var(--color-deep)]">Enable Manual QR</p><p class="text-sm text-[var(--color-titanium)]">Allow customers to pay by sending QR payment proof</p></div>
+              <button v-if="isAdmin" class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="manualPaymentEnabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="manualPaymentEnabled = !manualPaymentEnabled"><span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="manualPaymentEnabled ? 'translate-x-6' : 'translate-x-1'" /></button>
             </div>
-            <div class="flex items-center gap-2 rounded-input bg-[var(--color-warning)]/5 border border-[var(--color-warning)]/20 px-3 py-2 text-xs text-[var(--color-warning)]">
-              <Icon name="lucide:alert-triangle" class="h-4 w-4 shrink-0" />
-              <span>At least one payment method must remain enabled.</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- VALIDATION WARNING -->
-        <div
-          v-if="isUpgradedPlan && !atLeastOnePaymentMethod"
-          class="rounded-input bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/20 p-4"
-        >
-          <div class="flex items-center gap-2 text-sm text-[var(--color-danger)]">
-            <Icon name="lucide:alert-circle" class="h-5 w-5 shrink-0" />
-            <span class="font-medium">At least one payment method must be enabled. Enable PayMongo or Manual QR to continue.</span>
           </div>
         </div>
 
         <!-- SAVE PAYMENT BUTTON (Admin Only) -->
         <div v-if="isAdmin" class="flex justify-end">
-          <button
-            class="btn-design flex items-center gap-2 rounded-btn bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--color-titanium)] disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="isPaymentSaving || (isUpgradedPlan && !atLeastOnePaymentMethod)"
-            @click="savePaymentSettings"
-          >
+          <button class="btn-design flex items-center gap-2 rounded-btn bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--color-titanium)] disabled:cursor-not-allowed disabled:opacity-50" :disabled="isPaymentSaving || (isUpgradedPlan && !atLeastOnePaymentMethod)" @click="savePaymentSettings">
             <Icon v-if="isPaymentSaving" name="lucide:loader-2" class="h-4 w-4 animate-spin" />
             <Icon v-else name="lucide:save" class="h-4 w-4" />
             {{ isPaymentSaving ? 'Saving...' : 'Save Payment Settings' }}
@@ -855,11 +581,9 @@ onMounted(() => {
     </template>
 
     <!-- ═══════════════════════════════════════════════ -->
-    <!-- TAB 2 — EMAIL SETTINGS                         -->
+    <!-- TAB 2 — EMAIL SETTINGS (simplified)            -->
     <!-- ═══════════════════════════════════════════════ -->
     <template v-if="activeTab === 'email'">
-
-      <!-- Loading Skeleton -->
       <div v-if="isEmailLoading" class="space-y-6">
         <div class="card-design p-6">
           <div class="flex items-center gap-3 mb-6">
@@ -877,157 +601,44 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Error State with Retry -->
       <div v-else-if="emailLoadError" class="card-design p-8 text-center">
         <Icon name="lucide:alert-circle" class="mx-auto mb-3 h-12 w-12 text-[var(--color-danger)]" />
         <h3 class="mb-2 text-lg font-semibold text-[var(--color-deep)]">Failed to Load Email Settings</h3>
-        <p class="mb-4 text-sm text-[var(--color-titanium)]">
-          Something went wrong while fetching your email settings. Please try again.
-        </p>
-        <button
-          class="btn-design bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-titanium)]"
-          @click="fetchEmailSettings"
-        >
-          <Icon name="lucide:refresh-cw" class="mr-1.5 inline h-4 w-4" />
-          Retry
-        </button>
+        <p class="mb-4 text-sm text-[var(--color-titanium)]">Something went wrong. Please try again.</p>
+        <button class="btn-design bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-titanium)]" @click="fetchEmailSettings"><Icon name="lucide:refresh-cw" class="mr-1.5 inline h-4 w-4" /> Retry</button>
       </div>
 
-      <!-- Email Settings Content -->
       <div v-else class="space-y-6">
-
-        <!-- SECTION C — Email Notification Settings (Upgraded Plan Only) -->
         <div class="card-design p-6">
           <div class="mb-4 flex items-center gap-3">
-            <div class="flex h-10 w-10 items-center justify-center rounded-btn bg-[var(--color-success)]/10">
-              <Icon name="lucide:mail" class="h-5 w-5 text-[var(--color-success)]" />
-            </div>
-            <div>
-              <h2 class="text-lg font-semibold text-[var(--color-deep)]">Email Notifications</h2>
-              <p class="text-sm text-[var(--color-titanium)]">Send automated email notifications via Resend</p>
-            </div>
+            <div class="flex h-10 w-10 items-center justify-center rounded-btn bg-[var(--color-success)]/10"><Icon name="lucide:mail" class="h-5 w-5 text-[var(--color-success)]" /></div>
+            <div><h2 class="text-lg font-semibold text-[var(--color-deep)]">Email Notifications</h2><p class="text-sm text-[var(--color-titanium)]">Control automated email notifications sent to your customers</p></div>
           </div>
 
-          <!-- Basic Plan — Upgrade Prompt -->
           <div v-if="isBasicPlan" class="rounded-input bg-[var(--color-info)]/5 border border-[var(--color-info)]/20 p-6 text-center">
             <Icon name="lucide:lock" class="mx-auto mb-3 h-10 w-10 text-[var(--color-info)]" />
             <h3 class="mb-2 text-lg font-semibold text-[var(--color-deep)]">Upgrade to Enable Email Notifications</h3>
-            <p class="mb-4 text-sm text-[var(--color-titanium)]">
-              Email notifications are available on the Upgraded plan. Send booking confirmations, appointment reminders, and more automatically.
-            </p>
-            <button class="btn-design bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-titanium)]">
-              Upgrade Plan
-            </button>
+            <p class="mb-4 text-sm text-[var(--color-titanium)]">Email notifications require the Upgraded plan.</p>
+            <button class="btn-design bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-titanium)]">Upgrade Plan</button>
           </div>
 
-          <!-- Manager/Cashier/Barber — Access Denied -->
           <div v-else-if="!isAdmin" class="rounded-input bg-[var(--color-silver)]/10 border border-[var(--color-silver)]/30 p-6 text-center">
             <Icon name="lucide:shield" class="mx-auto mb-3 h-10 w-10 text-[var(--color-titanium)]" />
             <h3 class="mb-2 text-lg font-semibold text-[var(--color-deep)]">Admin Access Required</h3>
-            <p class="text-sm text-[var(--color-titanium)]">
-              Email settings can only be configured by the shop admin. Contact your admin to update email notification settings.
-            </p>
+            <p class="text-sm text-[var(--color-titanium)]">Email settings can only be configured by the shop admin.</p>
           </div>
 
-          <!-- Upgraded Plan — Full Email Settings -->
           <div v-else class="space-y-5">
-
-            <!-- Resend API Key -->
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Resend API Key</label>
-              <div class="relative">
-                <input
-                  v-model="resendApiKey"
-                  :type="showResendKey ? 'text' : 'password'"
-                  placeholder="re_xxxxx"
-                  class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 pr-10 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
-                  @input="resendKeyDirty = true"
-                />
-                <button
-                  type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]"
-                  @click="showResendKey = !showResendKey"
-                >
-                  <Icon :name="showResendKey ? 'lucide:eye-off' : 'lucide:eye'" class="h-4 w-4" />
-                </button>
-              </div>
-              <p class="mt-1 text-xs text-[var(--color-titanium)]">
-                {{ hasResendKeySaved && !resendKeyDirty
-                    ? 'An API key is already saved. Enter a new one to update.'
-                    : resendKeyDirty
-                      ? 'Enter a new API key to update.'
-                      : 'No API key configured yet.' }}
-              </p>
-            </div>
-
-            <!-- Test Resend Connection -->
-            <div class="flex items-center gap-3">
-              <button
-                class="btn-design flex items-center gap-2 rounded-btn border border-[var(--color-success)] px-4 py-2 text-sm font-medium text-[var(--color-success)] transition-colors hover:bg-[var(--color-success)]/10 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="isTestingResend || !canTestResend"
-                @click="testResendConnection"
-              >
-                <Icon v-if="isTestingResend" name="lucide:loader-2" class="h-4 w-4 animate-spin" />
-                <Icon v-else name="lucide:send" class="h-4 w-4" />
-                Test Connection
-              </button>
-              <div v-if="resendTestResult" class="flex items-center gap-1.5 text-sm">
-                <template v-if="resendTestResult.sent">
-                  <Icon name="lucide:check-circle" class="h-4 w-4 text-[var(--color-success)]" />
-                  <span class="text-[var(--color-success)]">Test email sent to {{ resendTestResult.email }}</span>
-                </template>
-                <template v-else>
-                  <Icon name="lucide:x-circle" class="h-4 w-4 text-[var(--color-danger)]" />
-                  <span class="text-[var(--color-danger)]">{{ resendTestResult.error || 'Failed to send test email' }}</span>
-                </template>
-              </div>
-            </div>
-
-            <!-- Sender Name -->
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Sender Name</label>
-              <input
-                v-model="senderName"
-                type="text"
-                placeholder="Kings Barbers"
-                class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
-              />
-              <p class="mt-1 text-xs text-[var(--color-titanium)]">The name that appears in the "From" field of emails.</p>
-            </div>
-
-            <!-- Sender Email -->
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Sender Email</label>
-              <input
-                v-model="senderEmail"
-                type="email"
-                placeholder="hello@kingsbarbers.com"
-                class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
-              />
-              <p class="mt-1 text-xs text-[var(--color-titanium)]">
-                Must be a verified domain in Resend. Use <code class="rounded bg-[var(--color-silver)]/20 px-1">onboarding@resend.dev</code> for testing.
-              </p>
-            </div>
-
             <!-- Notification Toggles -->
             <div class="space-y-3">
-              <p class="text-sm font-medium text-[var(--color-deep)]">Notification Toggles</p>
-
               <!-- Booking Confirmation Toggle -->
               <div class="flex items-center justify-between rounded-input bg-[var(--color-white)] p-4">
                 <div>
                   <p class="font-medium text-[var(--color-deep)]">Send booking confirmation emails</p>
                   <p class="text-sm text-[var(--color-titanium)]">Notify customers when their booking is confirmed</p>
                 </div>
-                <button
-                  class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
-                  :class="emailConfirmation ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'"
-                  @click="emailConfirmation = !emailConfirmation"
-                >
-                  <span
-                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
-                    :class="emailConfirmation ? 'translate-x-6' : 'translate-x-1'"
-                  />
+                <button class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="emailConfirmation ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="emailConfirmation = !emailConfirmation">
+                  <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="emailConfirmation ? 'translate-x-6' : 'translate-x-1'" />
                 </button>
               </div>
 
@@ -1037,15 +648,8 @@ onMounted(() => {
                   <p class="font-medium text-[var(--color-deep)]">Send appointment reminder emails</p>
                   <p class="text-sm text-[var(--color-titanium)]">Remind customers before their appointment</p>
                 </div>
-                <button
-                  class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
-                  :class="emailReminder ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'"
-                  @click="emailReminder = !emailReminder"
-                >
-                  <span
-                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
-                    :class="emailReminder ? 'translate-x-6' : 'translate-x-1'"
-                  />
+                <button class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="emailReminder ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="emailReminder = !emailReminder">
+                  <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="emailReminder ? 'translate-x-6' : 'translate-x-1'" />
                 </button>
               </div>
 
@@ -1055,28 +659,16 @@ onMounted(() => {
                 <p class="mb-3 text-xs text-[var(--color-titanium)]">Send reminders at two intervals before each appointment.</p>
                 <div class="flex items-center gap-4">
                   <div class="flex items-center gap-2">
-                    <input
-                      v-model.number="reminderHoursFirst"
-                      type="number"
-                      min="1"
-                      class="input-design w-20 border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-3 py-2 text-center text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
-                    />
+                    <input v-model.number="reminderHoursFirst" type="number" min="1" class="input-design w-20 border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-3 py-2 text-center text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20" />
                     <span class="text-sm text-[var(--color-titanium)]">hours before</span>
                   </div>
                   <span class="text-sm font-medium text-[var(--color-titanium)]">AND</span>
                   <div class="flex items-center gap-2">
-                    <input
-                      v-model.number="reminderHoursSecond"
-                      type="number"
-                      min="1"
-                      class="input-design w-20 border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-3 py-2 text-center text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
-                    />
+                    <input v-model.number="reminderHoursSecond" type="number" min="1" class="input-design w-20 border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-3 py-2 text-center text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20" />
                     <span class="text-sm text-[var(--color-titanium)]">hours before</span>
                   </div>
                 </div>
-                <p v-if="reminderHoursFirst <= 0 || reminderHoursSecond <= 0" class="mt-2 text-xs text-[var(--color-danger)]">
-                  Both values must be greater than 0.
-                </p>
+                <p v-if="reminderHoursFirst <= 0 || reminderHoursSecond <= 0" class="mt-2 text-xs text-[var(--color-danger)]">Both values must be greater than 0.</p>
               </div>
             </div>
           </div>
@@ -1084,11 +676,7 @@ onMounted(() => {
 
         <!-- SAVE EMAIL BUTTON (Admin Only) -->
         <div v-if="isAdmin && isUpgradedPlan" class="flex justify-end">
-          <button
-            class="btn-design flex items-center gap-2 rounded-btn bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--color-titanium)] disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="isEmailSaving || (emailReminder && (reminderHoursFirst <= 0 || reminderHoursSecond <= 0))"
-            @click="saveEmailSettings"
-          >
+          <button class="btn-design flex items-center gap-2 rounded-btn bg-[var(--color-deep)] px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--color-titanium)] disabled:cursor-not-allowed disabled:opacity-50" :disabled="isEmailSaving || (emailReminder && (reminderHoursFirst <= 0 || reminderHoursSecond <= 0))" @click="saveEmailSettings">
             <Icon v-if="isEmailSaving" name="lucide:loader-2" class="h-4 w-4 animate-spin" />
             <Icon v-else name="lucide:save" class="h-4 w-4" />
             {{ isEmailSaving ? 'Saving...' : 'Save Email Settings' }}

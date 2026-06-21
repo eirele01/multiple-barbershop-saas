@@ -1,31 +1,23 @@
 /**
  * PATCH /api/admin/settings/email
  *
- * Updates email settings for the authenticated admin's shop.
- * - Encrypts resend_api_key before saving
- * - Admin-only access
+ * Updates email notification toggles for the authenticated admin's shop.
+ * Note: Resend API key, sender email, and sender name are now managed
+ * at the platform level (super admin). Shop admins only control toggles.
  *
  * Body fields:
- *   resend_api_key, sender_email, sender_name,
  *   email_confirmation, email_reminder, reminder_hours
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { encrypt } from '~/utils/server/encryption'
-
-const MASKED_API_KEY = 're_***...***'
 
 const emailSettingsSchema = z.object({
-  resend_api_key: z.string().nullable().optional(),
-  sender_email: z.string().nullable().optional(),
-  sender_name: z.string().nullable().optional(),
   email_confirmation: z.boolean().optional(),
   email_reminder: z.boolean().optional(),
   reminder_hours: z.array(z.number().positive()).min(1).optional(),
 })
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig()
   const body = await readBody(event)
 
   const parsed = emailSettingsSchema.safeParse(body)
@@ -40,49 +32,25 @@ export default defineEventHandler(async (event) => {
   // Authenticate
   const authHeader = getHeader(event, 'authorization')
   const token = authHeader?.replace('Bearer ', '')
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized — no token provided' })
-  }
+  const authUser = await verifyAuth(token || '')
 
-  const supabase = createClient(config.public.supabaseUrl as string, config.public.supabaseKey as string, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  })
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-  if (authError || !user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
-  }
-
-  const supabaseAdmin = createClient(config.public.supabaseUrl as string, config.supabaseServiceKey as string)
-  const { data: userProfile, error: profileError } = await supabaseAdmin
-    .from('users')
-    .select('id, role, shop_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !userProfile) {
-    throw createError({ statusCode: 403, statusMessage: 'User profile not found' })
-  }
-
-  // Admin only
-  if (userProfile.role !== 'admin') {
+  if (authUser.role !== 'admin') {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions — admin role required' })
   }
 
-  if (!userProfile.shop_id) {
+  if (!authUser.shop_id) {
     throw createError({ statusCode: 403, statusMessage: 'No shop associated with this account' })
   }
 
-  // Build update object
+  const config = useRuntimeConfig()
+  const supabaseAdmin = createClient(
+    config.public.supabaseUrl as string,
+    config.supabaseServiceKey as string
+  )
+
+  // Build update object (toggles only)
   const updateData: Record<string, unknown> = {}
 
-  // Simple fields
-  if (parsed.data.sender_email !== undefined) {
-    updateData.sender_email = parsed.data.sender_email || null
-  }
-  if (parsed.data.sender_name !== undefined) {
-    updateData.sender_name = parsed.data.sender_name || null
-  }
   if (parsed.data.email_confirmation !== undefined) {
     updateData.email_confirmation = parsed.data.email_confirmation
   }
@@ -93,20 +61,15 @@ export default defineEventHandler(async (event) => {
     updateData.reminder_hours = parsed.data.reminder_hours
   }
 
-  // API key — encrypt before saving, but only if it's a NEW value (not the masked placeholder)
-  if (parsed.data.resend_api_key !== undefined) {
-    const newKey = parsed.data.resend_api_key
-    if (newKey && newKey !== MASKED_API_KEY && newKey.trim() !== '') {
-      updateData.resend_api_key = encrypt(newKey.trim())
-    }
-    // If the masked value is sent back, we don't update — keep the existing encrypted value
+  if (Object.keys(updateData).length === 0) {
+    throw createError({ statusCode: 400, statusMessage: 'No fields to update' })
   }
 
   // Update the shop
   const { error: updateError } = await supabaseAdmin
     .from('shops')
     .update(updateData)
-    .eq('id', userProfile.shop_id)
+    .eq('id', authUser.shop_id)
 
   if (updateError) {
     console.error('Error updating email settings:', updateError)
@@ -115,21 +78,15 @@ export default defineEventHandler(async (event) => {
 
   // Log to activity_logs
   await supabaseAdmin.from('activity_logs').insert({
-    shop_id: userProfile.shop_id,
-    user_id: user.id,
-    user_email: user.email || '',
-    user_role: userProfile.role,
+    shop_id: authUser.shop_id,
+    user_id: authUser.id,
+    user_email: authUser.email,
+    user_role: authUser.role,
     action: 'settings.email_updated',
     entity_type: 'shop',
-    entity_id: userProfile.shop_id,
+    entity_id: authUser.shop_id,
     entity_name: 'Email Settings',
-    new_value: {
-      ...Object.fromEntries(Object.entries(updateData).map(([k, v]) => {
-        // Don't log encrypted values
-        if (k === 'resend_api_key') return [k, '[ENCRYPTED]']
-        return [k, v]
-      })),
-    },
+    new_value: updateData,
   })
 
   return {

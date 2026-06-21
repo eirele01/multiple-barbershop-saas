@@ -1,23 +1,23 @@
-/**
+
+  /**
  * sendShopEmail — Real Resend API email sender for shop notifications.
  *
- * Checks if the shop is on an upgraded plan and has a resend_api_key configured.
- * If not, returns { sent: false, error: 'basic_plan' } or { sent: false, error: 'no_api_key' }.
+ * Reads Resend credentials from platform_settings (managed by super admin)
+ * so that shop owners don't need their own Resend API key or domain.
  *
  * Logic:
- * 1. Fetch shop record (plan, resend_api_key, sender_email, sender_name, email flags, name, logo_url)
- * 2. Guard: plan must be 'upgraded', resend_api_key must exist
- * 3. Decrypt resend_api_key
- * 4. Initialize Resend client with the shop's key
- * 5. Get recipient email from data.customer.email
- * 6. Render the correct HTML template via templateMap
- * 7. Send via resend.emails.send()
- * 8. Return { sent: true } or { sent: false, error }
+ * 1. Fetch platform settings (resend_api_key, sender_email, sender_name)
+ * 2. If platform settings exist, use those
+ * 3. Fallback: fetch shop record for per-shop config (legacy backward compat)
+ * 4. Guard: plan must be 'upgraded', resend_api_key must exist
+ * 5. Initialize Resend client with the key
+ * 6. Get recipient email from data
+ * 7. Render the correct HTML template via templateMap
+ * 8. Send via resend.emails.send()
  */
 
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import { decrypt } from '~/utils/server/encryption'
 import { templateMap } from '~/utils/server/emailTemplates'
 
 // ─── Email Template Types ─────────────────────────────
@@ -49,6 +49,29 @@ const CONFIRMATION_TEMPLATES: EmailTemplate[] = ['booking.confirmed']
 const REMINDER_TEMPLATES: EmailTemplate[] = ['booking.reminder']
 
 /**
+ * Get platform-level email settings from platform_settings table.
+ */
+async function getPlatformEmailSettings(supabase: any) {
+  const keys = ['platform_resend_api_key', 'platform_sender_email', 'platform_sender_name']
+  const { data: settings } = await supabase
+    .from('platform_settings')
+    .select('key, value')
+    .in('key', keys)
+
+  if (!settings) return null
+
+  const map = new Map(settings.map((s: { key: string; value: string | null }) => [s.key, s.value]))
+  const apiKey = map.get('platform_resend_api_key')
+  if (!apiKey) return null
+
+  return {
+    resendApiKey: apiKey,
+    senderEmail: map.get('platform_sender_email') || 'notifications@reservationph.com',
+    senderName: map.get('platform_sender_name') || 'BarberShop SaaS',
+  }
+}
+
+/**
  * Send an email notification on behalf of a shop.
  *
  * @param shopId - The shop's UUID
@@ -62,16 +85,16 @@ export async function sendShopEmail(
   data: EmailData
 ): Promise<SendEmailResult> {
   try {
-    // Step 1: Fetch shop record
     const config = useRuntimeConfig()
     const supabase = createClient(
       config.public.supabaseUrl as string,
       config.supabaseServiceKey as string
     )
 
+    // Step 1: Fetch shop record (for plan check + toggles + branding)
     const { data: shop, error: shopError } = await supabase
       .from('shops')
-      .select('plan, resend_api_key, sender_email, sender_name, email_confirmation, email_reminder, name, logo_url, primary_color, address_street, address_city, address_state, address_zip, phone, latitude, longitude, slug')
+      .select('plan, email_confirmation, email_reminder, name, logo_url, primary_color, address_street, address_city, address_state, address_zip, phone, latitude, longitude, slug')
       .eq('id', shopId)
       .single()
 
@@ -85,12 +108,7 @@ export async function sendShopEmail(
       return { sent: false, error: 'basic_plan' }
     }
 
-    // Step 3: Guard — resend_api_key must exist
-    if (!shop.resend_api_key) {
-      return { sent: false, error: 'no_api_key' }
-    }
-
-    // Step 4: Check email toggle flags
+    // Step 3: Check email toggle flags
     if (CONFIRMATION_TEMPLATES.includes(template) && !shop.email_confirmation) {
       return { sent: false, error: 'confirmation_emails_disabled' }
     }
@@ -98,23 +116,46 @@ export async function sendShopEmail(
       return { sent: false, error: 'reminder_emails_disabled' }
     }
 
-    // Step 5: Decrypt resend_api_key
-    let decryptedApiKey: string
-    try {
-      decryptedApiKey = decrypt(shop.resend_api_key)
-    } catch (e) {
-      console.error('[EMAIL] Error decrypting resend_api_key:', e)
-      return { sent: false, error: 'decryption_failed' }
+    // Step 4: Get Resend credentials from platform settings (or fallback to shop-level)
+    const platform = await getPlatformEmailSettings(supabase)
+
+    let resendApiKey: string
+    let senderEmail: string
+    let senderName: string
+
+    if (platform) {
+      resendApiKey = platform.resendApiKey
+      senderEmail = platform.senderEmail
+      senderName = platform.senderName
+    } else {
+      // Fallback: use shop-level config (legacy)
+      const { data: shopConfig } = await supabase
+        .from('shops')
+        .select('resend_api_key, sender_email, sender_name')
+        .eq('id', shopId)
+        .single()
+
+      if (!shopConfig?.resend_api_key) {
+        return { sent: false, error: 'no_api_key' }
+      }
+
+      // Decrypt legacy per-shop key
+      try {
+        const { decrypt } = await import('~/utils/server/encryption')
+        resendApiKey = decrypt(shopConfig.resend_api_key)
+      } catch (e) {
+        console.error('[EMAIL] Error decrypting legacy resend_api_key:', e)
+        return { sent: false, error: 'decryption_failed' }
+      }
+
+      senderEmail = shopConfig.sender_email || 'onboarding@resend.dev'
+      senderName = shopConfig.sender_name || shop.name
     }
 
-    if (!decryptedApiKey) {
-      return { sent: false, error: 'no_api_key' }
-    }
+    // Step 5: Initialize Resend client
+    const resend = new Resend(resendApiKey)
 
-    // Step 6: Initialize Resend client
-    const resend = new Resend(decryptedApiKey)
-
-    // Step 7: Get recipient email from data.customer.email
+    // Step 6: Get recipient email from data.customer
     const customer = data.customer as { email?: string; name?: string } | undefined
     const recipientEmail = customer?.email || (data.customerEmail as string) || (data.email as string)
 
@@ -123,7 +164,7 @@ export async function sendShopEmail(
       return { sent: false, error: 'no_recipient_email' }
     }
 
-    // Step 8: Render the correct HTML template
+    // Step 7: Render the correct HTML template
     const templateFunc = templateMap[template]
     if (!templateFunc) {
       console.error('[EMAIL] No template found for:', template)
@@ -149,12 +190,10 @@ export async function sendShopEmail(
 
     const rendered = templateFunc(enrichedData as any)
 
-    // Step 9: Determine sender
-    const senderEmail = shop.sender_email || 'onboarding@resend.dev'
-    const senderName = shop.sender_name || shop.name
+    // Step 8: Determine sender
     const from = `"${senderName}" <${senderEmail}>`
 
-    // Step 10: Send via Resend
+    // Step 9: Send via Resend
     const { error: sendError } = await resend.emails.send({
       from,
       to: recipientEmail,

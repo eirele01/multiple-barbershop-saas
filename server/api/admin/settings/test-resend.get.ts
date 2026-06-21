@@ -1,14 +1,13 @@
 /**
  * GET /api/admin/settings/test-resend
  *
- * Tests the shop's Resend API connection by sending a test email
- * to the shop owner's email address.
+ * Tests the platform's Resend API connection by sending a test email
+ * to the shop owner's email address. Uses platform-level Resend config.
  *
  * Accessible by: admin only
  */
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import { decrypt } from '~/utils/server/encryption'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -16,82 +15,60 @@ export default defineEventHandler(async (event) => {
   // Authenticate
   const authHeader = getHeader(event, 'authorization')
   const token = authHeader?.replace('Bearer ', '')
-  if (!token) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized — no token provided' })
-  }
+  const authUser = await verifyAuth(token || '')
 
-  const supabase = createClient(config.public.supabaseUrl as string, config.public.supabaseKey as string, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  })
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-  if (authError || !user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid or expired token' })
-  }
-
-  const supabaseAdmin = createClient(config.public.supabaseUrl as string, config.supabaseServiceKey as string)
-  const { data: userProfile, error: profileError } = await supabaseAdmin
-    .from('users')
-    .select('id, role, shop_id')
-    .eq('id', user.id)
-    .single()
-
-  if (profileError || !userProfile) {
-    throw createError({ statusCode: 403, statusMessage: 'User profile not found' })
-  }
-
-  // Admin only
-  if (userProfile.role !== 'admin') {
+  if (authUser.role !== 'admin') {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions — admin role required' })
   }
 
-  if (!userProfile.shop_id) {
+  if (!authUser.shop_id) {
     throw createError({ statusCode: 403, statusMessage: 'No shop associated with this account' })
   }
 
-  // Fetch shop's email settings
-  const { data: shop, error: shopError } = await supabaseAdmin
+  const supabase = createClient(
+    config.public.supabaseUrl as string,
+    config.supabaseServiceKey as string
+  )
+
+  // Fetch platform Resend settings
+  const { data: platformSettings } = await supabase
+    .from('platform_settings')
+    .select('key, value')
+    .in('key', ['platform_resend_api_key', 'platform_sender_email', 'platform_sender_name'])
+
+  if (!platformSettings) {
+    return { sent: false, error: 'Platform email settings not found' }
+  }
+
+  const settingsMap = new Map(platformSettings.map((s: any) => [s.key, s.value]))
+  const apiKey = settingsMap.get('platform_resend_api_key')
+
+  if (!apiKey) {
+    return { sent: false, error: 'No platform Resend API key configured. Ask the super admin to set it up.' }
+  }
+
+  const senderEmail = settingsMap.get('platform_sender_email') || 'notifications@reservationph.com'
+  const senderName = settingsMap.get('platform_sender_name') || 'BarberShop SaaS'
+
+  // Get shop info for recipient and branding
+  const { data: shop } = await supabase
     .from('shops')
-    .select('name, resend_api_key, sender_email, sender_name, email')
-    .eq('id', userProfile.shop_id)
+    .select('name, email')
+    .eq('id', authUser.shop_id)
     .single()
 
-  if (shopError || !shop) {
-    throw createError({ statusCode: 404, statusMessage: 'Shop not found' })
-  }
-
-  if (!shop.resend_api_key) {
-    return { sent: false, error: 'No Resend API key configured' }
-  }
-
-  // Decrypt API key
-  let decryptedApiKey: string
-  try {
-    decryptedApiKey = decrypt(shop.resend_api_key)
-  } catch (e) {
-    console.error('[TEST-RESEND] Error decrypting API key:', e)
-    return { sent: false, error: 'Failed to decrypt API key' }
-  }
-
-  if (!decryptedApiKey) {
-    return { sent: false, error: 'No Resend API key configured' }
-  }
-
-  // Determine recipient — shop owner's email
-  const recipientEmail = shop.email || user.email
+  const recipientEmail = shop?.email || authUser.email
   if (!recipientEmail) {
     return { sent: false, error: 'No email address found for the shop' }
   }
 
   // Initialize Resend and send test email
-  const resend = new Resend(decryptedApiKey)
-  const senderEmail = shop.sender_email || 'onboarding@resend.dev'
-  const senderName = shop.sender_name || shop.name
+  const resend = new Resend(apiKey)
 
   const { error: sendError } = await resend.emails.send({
     from: `"${senderName}" <${senderEmail}>`,
     to: recipientEmail,
-    subject: `Test Email from ${shop.name} — Resend Connected`,
+    subject: `Test Email from ${shop?.name || 'BarberShop SaaS'} — Email System Connected`,
     html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8" /></head>
@@ -102,9 +79,9 @@ export default defineEventHandler(async (event) => {
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;">
         <tr>
           <td style="padding:32px 24px;text-align:center;" align="center">
-            <h1 style="margin:0 0 8px 0;font-size:20px;color:#1f2937;">Resend is Connected!</h1>
-            <p style="margin:0 0 16px 0;font-size:14px;color:#6b7280;">This is a test email from <strong>${shop.name}</strong>.</p>
-            <p style="margin:0;font-size:14px;color:#22c55e;font-weight:600;">Your email system is working correctly.</p>
+            <h1 style="margin:0 0 8px 0;font-size:20px;color:#1f2937;">Email System is Connected!</h1>
+            <p style="margin:0 0 16px 0;font-size:14px;color:#6b7280;">This is a test email sent using the platform's email configuration.</p>
+            <p style="margin:0;font-size:14px;color:#22c55e;font-weight:600;">Your shop's email notifications are working correctly.</p>
           </td>
         </tr>
         <tr>
