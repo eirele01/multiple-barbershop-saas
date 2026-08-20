@@ -116,7 +116,7 @@ async function handleSignIn() {
     } else {
       await router.push('/')
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     errorMessage.value = error.message || 'Invalid email or password'
   } finally {
     isLoading.value = false
@@ -161,7 +161,13 @@ function validateRegistration(): boolean {
     regPhoneError.value = 'Phone number is required'
     valid = false
   } else {
-    regPhoneError.value = ''
+    const phoneClean = regPhone.value.replace(/[\s\-()]/g, '')
+    if (!/^(09\d{9}|\+639\d{9}|0\d{10})$/.test(phoneClean)) {
+      regPhoneError.value = 'Enter a valid Philippine phone number (e.g., 09171234567)'
+      valid = false
+    } else {
+      regPhoneError.value = ''
+    }
   }
 
   if (!regPassword.value) {
@@ -208,7 +214,7 @@ async function handleCustomerRegister() {
     await authStore.signIn(regEmail.value.trim(), regPassword.value)
     const redirect = route.query.redirect as string
     await router.push(redirect || '/customer/dashboard')
-  } catch (error: any) {
+  } catch (error: unknown) {
     const data = error?.data
     errorMessage.value = data?.statusMessage || data?.message || error?.message || 'Registration failed. Please try again.'
   } finally {
@@ -219,6 +225,16 @@ async function handleCustomerRegister() {
 // ─── Shop Owner redirect ─────────────────────────────
 function goToShopRegister() {
   router.push('/register')
+}
+
+// ─── Keyboard navigation for tabs ────────────────────
+const tabKeysLogin = ['signin', 'create'] as const
+function handleTabKeyLogin(e: KeyboardEvent) {
+  const idx = tabKeysLogin.indexOf(activeTab.value as any)
+  if (e.key === 'ArrowRight') activeTab.value = tabKeysLogin[(idx + 1) % tabKeysLogin.length]
+  if (e.key === 'ArrowLeft') activeTab.value = tabKeysLogin[(idx - 1 + tabKeysLogin.length) % tabKeysLogin.length]
+  if (e.key === 'Home') activeTab.value = tabKeysLogin[0]
+  if (e.key === 'End') activeTab.value = tabKeysLogin[tabKeysLogin.length - 1]
 }
 </script>
 
@@ -236,8 +252,10 @@ function goToShopRegister() {
     </div>
 
     <!-- Tab Toggle -->
-    <div class="mb-6 flex rounded-btn border border-[var(--color-silver)]/50 p-1">
+    <div role="tablist" class="mb-6 flex rounded-btn border border-[var(--color-silver)]/50 p-1" @keydown.prevent="handleTabKeyLogin">
       <button
+        role="tab"
+        :aria-selected="activeTab === 'signin'"
         class="flex-1 rounded-btn px-4 py-2.5 text-sm font-semibold transition-all min-h-[44px]"
         :class="activeTab === 'signin'
           ? 'bg-[var(--color-deep)] text-white shadow-sm'
@@ -247,6 +265,8 @@ function goToShopRegister() {
         Sign In
       </button>
       <button
+        role="tab"
+        :aria-selected="activeTab === 'create'"
         class="flex-1 rounded-btn px-4 py-2.5 text-sm font-semibold transition-all min-h-[44px]"
         :class="activeTab === 'create'
           ? 'bg-[var(--color-deep)] text-white shadow-sm'
@@ -309,6 +329,7 @@ function goToShopRegister() {
               />
               <button
                 type="button"
+                :aria-label="showPassword ? 'Hide password' : 'Show password'"
                 class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]"
                 @click="showPassword = !showPassword"
               >
@@ -487,6 +508,7 @@ function goToShopRegister() {
                 />
                 <button
                   type="button"
+                  :aria-label="showRegPassword ? 'Hide password' : 'Show password'"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]"
                   @click="showRegPassword = !showRegPassword"
                 >
@@ -510,6 +532,7 @@ function goToShopRegister() {
                 />
                 <button
                   type="button"
+                  :aria-label="showRegConfirmPassword ? 'Hide password' : 'Show password'"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]"
                   @click="showRegConfirmPassword = !showRegConfirmPassword"
                 >

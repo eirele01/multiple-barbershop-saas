@@ -21,6 +21,7 @@ const authStore = useAuthStore()
 const shopStore = useShopStore()
 const toast = useToast()
 const { confirm, ConfirmDialogComponent } = useConfirm()
+const { authFetch } = useAuthFetch()
 
 // ─── State ────────────────────────────────────────────
 const products = ref<Product[]>([])
@@ -74,21 +75,12 @@ const countLabel = computed(() => {
   return `${products.value.length} / ${limit} products (${planLabel})`
 })
 
-// ─── Auth helper ──────────────────────────────────────
-async function getAuthToken(): Promise<string> {
-  const supabase = useSupabase()
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token || ''
-}
-
 // ─── Fetch products ───────────────────────────────────
 async function fetchProducts() {
   isLoading.value = true
   hasError.value = false
   try {
-    const data = await $fetch('/api/admin/products', {
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
-    })
+    const data = await authFetch('/api/admin/products')
     products.value = (data as any)?.data || []
   } catch {
     hasError.value = true
@@ -214,17 +206,15 @@ async function saveProduct() {
       }
 
       if (isEditing.value && editingId.value) {
-        await $fetch(`/api/admin/products/${editingId.value}`, {
+        await authFetch(`/api/admin/products/${editingId.value}`, {
           method: 'PATCH',
           body: formData,
-          headers: { Authorization: `Bearer ${await getAuthToken()}` },
         })
         toast.success('Product updated')
       } else {
-        await $fetch('/api/admin/products', {
+        await authFetch('/api/admin/products', {
           method: 'POST',
           body: formData,
-          headers: { Authorization: `Bearer ${await getAuthToken()}` },
         })
         toast.success('Product created')
       }
@@ -248,17 +238,15 @@ async function saveProduct() {
       }
 
       if (isEditing.value && editingId.value) {
-        await $fetch(`/api/admin/products/${editingId.value}`, {
+        await authFetch(`/api/admin/products/${editingId.value}`, {
           method: 'PATCH',
           body: payload,
-          headers: { Authorization: `Bearer ${await getAuthToken()}` },
         })
         toast.success('Product updated')
       } else {
-        await $fetch('/api/admin/products', {
+        await authFetch('/api/admin/products', {
           method: 'POST',
           body: payload,
-          headers: { Authorization: `Bearer ${await getAuthToken()}` },
         })
         toast.success('Product created')
       }
@@ -266,7 +254,7 @@ async function saveProduct() {
 
     isPanelOpen.value = false
     await fetchProducts()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to save product')
   } finally {
     isSaving.value = false
@@ -276,14 +264,13 @@ async function saveProduct() {
 // ─── Toggle Active ────────────────────────────────────
 async function toggleActive(product: Product) {
   try {
-    await $fetch(`/api/admin/products/${product.id}`, {
+    await authFetch(`/api/admin/products/${product.id}`, {
       method: 'PATCH',
       body: { is_active: !product.is_active },
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     await fetchProducts()
     toast.success(product.is_active ? 'Product deactivated' : 'Product activated')
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to toggle status')
   }
 }
@@ -299,21 +286,18 @@ async function deleteProduct(product: Product) {
   if (!ok) return
 
   try {
-    await $fetch(`/api/admin/products/${product.id}`, {
+    await authFetch(`/api/admin/products/${product.id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Product deleted')
     await fetchProducts()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to delete product')
   }
 }
 
 // ─── Helpers ──────────────────────────────────────────
-function formatPrice(amount: number): string {
-  return `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
+const { formatPrice } = useFormat()
 
 function isLowStock(product: Product): boolean {
   return product.stock <= product.low_stock_threshold

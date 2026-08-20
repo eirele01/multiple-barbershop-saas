@@ -7,29 +7,25 @@
 import { createClient } from '@supabase/supabase-js'
 
 export default defineEventHandler(async (event) => {
+  const authHeader = getHeader(event, 'authorization')
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : ''
+  const authUser = await verifyAuth(token)
+
+  // Customer-only access
+  if (authUser.role !== 'customer') {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden: Customer access required' })
+  }
+
   const config = useRuntimeConfig()
   const supabase = createClient(
     config.public.supabaseUrl as string,
     config.supabaseServiceKey as string
   )
 
-  // Auth check
-  const authHeader = getHeader(event, 'authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-
-  const token = authHeader.substring(7)
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-  if (authError || !user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid token' })
-  }
-
   const query = getQuery(event)
   const shopId = query.shopId as string
-  const page = parseInt(query.page as string) || 1
-  const limit = Math.min(parseInt(query.limit as string) || 20, 100)
+  const page = Math.max(1, parseInt(query.page as string) || 1)
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit as string) || 20))
   const offset = (page - 1) * limit
 
   if (!shopId) {
@@ -41,7 +37,7 @@ export default defineEventHandler(async (event) => {
     .from('loyalty_points')
     .select('id, type, points, balance_after, note, expires_at, created_at, booking_id, reward_id', { count: 'exact' })
     .eq('shop_id', shopId)
-    .eq('customer_id', user.id)
+    .eq('customer_id', authUser.id)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 

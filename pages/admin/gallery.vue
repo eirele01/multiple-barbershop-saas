@@ -10,6 +10,7 @@
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
 import { checkTierLimit } from '~/utils/tierLimits'
+import { useAuthFetch } from '~/composables/useAuthFetch'
 import type { GalleryImage } from '~/types/database'
 
 definePageMeta({
@@ -24,6 +25,7 @@ const authStore = useAuthStore()
 const shopStore = useShopStore()
 const toast = useToast()
 const { confirm, ConfirmDialogComponent } = useConfirm()
+const { authFetch } = useAuthFetch()
 
 // ─── State ────────────────────────────────────────────
 const images = ref<GalleryImage[]>([])
@@ -83,21 +85,12 @@ const categoryOptions = [
   'Other',
 ]
 
-// ─── Auth helper ──────────────────────────────────────
-async function getAuthToken(): Promise<string> {
-  const supabase = useSupabase()
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token || ''
-}
-
 // ─── Fetch images ─────────────────────────────────────
 async function fetchImages() {
   isLoading.value = true
   hasError.value = false
   try {
-    const data = await $fetch('/api/admin/gallery', {
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
-    })
+    const data = await authFetch('/api/admin/gallery')
     images.value = (data as any)?.data || []
   } catch {
     hasError.value = true
@@ -202,10 +195,9 @@ async function uploadAll() {
       }
     }, 200)
 
-    const response = await $fetch('/api/admin/gallery/upload', {
+    const response = await authFetch('/api/admin/gallery/upload', {
       method: 'POST',
       body: formData,
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
 
     clearInterval(progressInterval)
@@ -218,7 +210,7 @@ async function uploadAll() {
     toast.success(`${(response as any)?.count || uploadFiles.value.length} image(s) uploaded successfully`)
     showUploadModal.value = false
     await fetchImages()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to upload images')
   } finally {
     isUploading.value = false
@@ -243,20 +235,19 @@ async function saveEdit() {
       ? editTags.value.split(',').map(t => t.trim()).filter(Boolean)
       : []
 
-    await $fetch(`/api/admin/gallery/${editingImage.value.id}`, {
+    await authFetch(`/api/admin/gallery/${editingImage.value.id}`, {
       method: 'PATCH',
       body: {
         caption: editCaption.value || null,
         category: editCategory.value || null,
         tags,
       },
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
 
     toast.success('Image updated')
     showEditModal.value = false
     await fetchImages()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to update image')
   } finally {
     isSavingEdit.value = false
@@ -274,13 +265,12 @@ async function deleteImage(image: GalleryImage) {
   if (!ok) return
 
   try {
-    await $fetch(`/api/admin/gallery/${image.id}`, {
+    await authFetch(`/api/admin/gallery/${image.id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Image deleted')
     await fetchImages()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to delete image')
   }
 }

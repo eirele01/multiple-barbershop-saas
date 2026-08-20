@@ -8,6 +8,7 @@
  */
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
+import { useAuthFetch } from '~/composables/useAuthFetch'
 
 definePageMeta({
   layout: 'admin',
@@ -17,6 +18,7 @@ definePageMeta({
 const authStore = useAuthStore()
 const shopStore = useShopStore()
 const toast = useToast()
+const { authFetch } = useAuthFetch()
 
 // ─── Tab State ──────────────────────────────────────
 const activeTab = ref<'payment' | 'email'>('payment')
@@ -77,26 +79,12 @@ const canTestConnection = computed(() =>
   hasSecretKeySaved.value || (secretKeyDirty.value && paymongoSecretKey.value.trim() !== '')
 )
 
-// ─── Helper: Get auth token ─────────────────────────
-function getAuthToken(): string | null {
-  return authStore.accessToken
-}
-
 // ─── Fetch Payment Settings ──────────────────────────
 async function fetchPaymentSettings() {
   isPaymentLoading.value = true
   paymentLoadError.value = false
   try {
-    const token = getAuthToken()
-    if (!token) {
-      paymentLoadError.value = true
-      return
-    }
-
-    const response = await $fetch('/api/admin/settings/payment', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
+    const response = await authFetch('/api/admin/settings/payment') as any
 
     shopPlan.value = response.plan
     paymongoEnabled.value = response.paymongo_enabled
@@ -117,10 +105,10 @@ async function fetchPaymentSettings() {
     secretKeyDirty.value = false
     webhookSecretDirty.value = false
     encryptionConfigured.value = response.encryption_configured ?? true
-  } catch (error: any) {
+  } catch (error: unknown) {
     paymentLoadError.value = true
     toast.error('Failed to load payment settings')
-    console.error('Error fetching payment settings:', error)
+    console.error('Error fetching payment settings:', error) // logged to console for debugging
   } finally {
     isPaymentLoading.value = false
   }
@@ -131,18 +119,7 @@ async function fetchEmailSettings() {
   isEmailLoading.value = true
   emailLoadError.value = false
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) {
-      emailLoadError.value = true
-      return
-    }
-
-    const response = await $fetch('/api/admin/settings/email', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
+    const response = await authFetch('/api/admin/settings/email') as any
 
     if (response.plan) shopPlan.value = response.plan
 
@@ -152,10 +129,10 @@ async function fetchEmailSettings() {
     const hours = response.reminder_hours || [24, 2]
     reminderHoursFirst.value = hours[0] || 24
     reminderHoursSecond.value = hours[1] || 2
-  } catch (error: any) {
+  } catch (error: unknown) {
     emailLoadError.value = true
     toast.error('Failed to load email settings')
-    console.error('Error fetching email settings:', error)
+    console.error('Error fetching email settings:', error) // logged to console for debugging
   } finally {
     isEmailLoading.value = false
   }
@@ -166,24 +143,17 @@ async function testConnection() {
   isTestingConnection.value = true
   testResult.value = null
   try {
-    const token = getAuthToken()
-    if (!token) {
-      testResult.value = { valid: false, error: 'Not authenticated — please log in again' }
-      return
-    }
-
     const useUnsavedKey = secretKeyDirty.value && paymongoSecretKey.value.trim() !== ''
 
-    const response = await $fetch('/api/admin/settings/test-paymongo', {
+    const response = await authFetch('/api/admin/settings/test-paymongo', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: useUnsavedKey
         ? { useUnsavedKey: true, secretKey: paymongoSecretKey.value.trim() }
         : {},
     }) as any
 
     testResult.value = { valid: response.valid, error: response.error }
-  } catch (error: any) {
+  } catch (error: unknown) {
     const serverMessage = error?.data?.statusMessage || error?.message || 'Connection test failed'
     testResult.value = { valid: false, error: serverMessage }
   } finally {
@@ -205,9 +175,6 @@ async function savePaymentSettings() {
 
   isPaymentSaving.value = true
   try {
-    const token = getAuthToken()
-    if (!token) return
-
     const payload: Record<string, any> = {
       paymongo_enabled: paymongoEnabled.value,
       manual_payment_enabled: manualPaymentEnabled.value,
@@ -227,9 +194,8 @@ async function savePaymentSettings() {
       payload.paymongo_webhook_secret = paymongoWebhookSecret.value.trim()
     }
 
-    const response = await $fetch('/api/admin/settings/payment', {
+    const response = await authFetch('/api/admin/settings/payment', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: payload,
     }) as any
 
@@ -254,10 +220,10 @@ async function savePaymentSettings() {
     if (response.qr_ph_enabled !== undefined) qrPhEnabled.value = response.qr_ph_enabled
     if (response.paymongo_webhook_url) webhookUrl.value = response.paymongo_webhook_url
     if (response.slug) shopSlug.value = response.slug
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to save payment settings'
     toast.error(message)
-    console.error('Error saving payment settings:', error)
+    console.error('Error saving payment settings:', error) // logged to console for debugging
   } finally {
     isPaymentSaving.value = false
   }
@@ -267,14 +233,8 @@ async function savePaymentSettings() {
 async function saveEmailSettings() {
   isEmailSaving.value = true
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    await $fetch('/api/admin/settings/email', {
+    await authFetch('/api/admin/settings/email', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: {
         email_confirmation: emailConfirmation.value,
         email_reminder: emailReminder.value,
@@ -284,10 +244,10 @@ async function saveEmailSettings() {
 
     toast.success('Email settings saved successfully')
     await shopStore.loadCurrentShop()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to save email settings'
     toast.error(message)
-    console.error('Error saving email settings:', error)
+    console.error('Error saving email settings:', error) // logged to console for debugging
   } finally {
     isEmailSaving.value = false
   }
@@ -304,6 +264,16 @@ onMounted(() => {
   fetchPaymentSettings()
   fetchEmailSettings()
 })
+
+// ─── Keyboard navigation for tabs ────────────────────
+const tabKeysSettings = ['payment', 'email'] as const
+function handleTabKeySettings(e: KeyboardEvent) {
+  const idx = tabKeysSettings.indexOf(activeTab.value as any)
+  if (e.key === 'ArrowRight') activeTab.value = tabKeysSettings[(idx + 1) % tabKeysSettings.length]
+  if (e.key === 'ArrowLeft') activeTab.value = tabKeysSettings[(idx - 1 + tabKeysSettings.length) % tabKeysSettings.length]
+  if (e.key === 'Home') activeTab.value = tabKeysSettings[0]
+  if (e.key === 'End') activeTab.value = tabKeysSettings[tabKeysSettings.length - 1]
+}
 </script>
 
 <template>
@@ -317,8 +287,10 @@ onMounted(() => {
     </div>
 
     <!-- Tab Navigation -->
-    <div class="flex gap-1 rounded-btn bg-[var(--color-silver)]/10 p-1">
+    <div role="tablist" class="flex gap-1 rounded-btn bg-[var(--color-silver)]/10 p-1" @keydown.prevent="handleTabKeySettings">
       <button
+        role="tab"
+        :aria-selected="activeTab === 'payment'"
         class="flex-1 rounded-btn px-4 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'payment'
           ? 'bg-[var(--color-white)] text-[var(--color-deep)] shadow-sm'
@@ -329,6 +301,8 @@ onMounted(() => {
         Payment
       </button>
       <button
+        role="tab"
+        :aria-selected="activeTab === 'email'"
         class="flex-1 rounded-btn px-4 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === 'email'
           ? 'bg-[var(--color-white)] text-[var(--color-deep)] shadow-sm'
@@ -443,6 +417,9 @@ onMounted(() => {
                 <p class="text-sm text-[var(--color-titanium)]">Accept online payments through PayMongo</p>
               </div>
               <button
+                role="switch"
+                :aria-checked="paymongoEnabled"
+                :aria-label="paymongoEnabled ? 'PayMongo enabled' : 'PayMongo disabled'"
                 class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
                 :class="paymongoEnabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'"
                 @click="paymongoEnabled = !paymongoEnabled"
@@ -461,6 +438,9 @@ onMounted(() => {
                     <p class="text-sm text-[var(--color-titanium)]">Use test keys. Switch OFF before accepting real payments.</p>
                   </div>
                   <button
+                    role="switch"
+                    :aria-checked="paymongoTestMode"
+                    :aria-label="paymongoTestMode ? 'Test mode enabled' : 'Test mode disabled'"
                     class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
                     :class="paymongoTestMode ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-danger)]'"
                     @click="paymongoTestMode = !paymongoTestMode"
@@ -539,7 +519,7 @@ onMounted(() => {
                 <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Webhook Secret</label>
                 <div class="relative">
                   <input v-model="paymongoWebhookSecret" :type="showWebhookSecret ? 'text' : 'password'" :placeholder="hasWebhookSecretSaved ? 'whsec_*** (saved — click to change)' : 'whsec_xxx'" class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 pr-10 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20" @input="webhookSecretDirty = true" />
-                  <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]" @click="showWebhookSecret = !showWebhookSecret"><Icon :name="showWebhookSecret ? 'lucide:eye-off' : 'lucide:eye'" class="h-4 w-4" /></button>
+                  <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]" :aria-label="showWebhookSecret ? 'Hide webhook secret' : 'Show webhook secret'" @click="showWebhookSecret = !showWebhookSecret"><Icon :name="showWebhookSecret ? 'lucide:eye-off' : 'lucide:eye'" class="h-4 w-4" /></button>
                 </div>
                 <p class="mt-1 text-xs text-[var(--color-titanium)]">{{ hasWebhookSecretSaved && !webhookSecretDirty ? 'A webhook secret is already saved. Enter a new one to update.' : webhookSecretDirty ? 'Enter a new webhook secret to update.' : 'No webhook secret configured yet.' }}</p>
               </div>
@@ -557,14 +537,14 @@ onMounted(() => {
           <div v-if="isBasicPlan" class="space-y-3">
             <div class="flex items-center justify-between rounded-input bg-[var(--color-white)] p-4">
               <div><p class="font-medium text-[var(--color-deep)]">Enable Manual QR</p><p class="text-sm text-[var(--color-titanium)]">Manual QR is always enabled on the Basic plan.</p></div>
-              <button class="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed items-center rounded-full bg-[var(--color-success)] opacity-60" disabled><span class="inline-block h-4 w-4 translate-x-6 transform rounded-full bg-white" /></button>
+              <button role="switch" aria-checked="true" aria-label="Manual QR enabled (always on for Basic plan)" class="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed items-center rounded-full bg-[var(--color-success)] opacity-60" disabled><span class="inline-block h-4 w-4 translate-x-6 transform rounded-full bg-white" /></button>
             </div>
             <div class="flex items-center gap-2 rounded-input bg-[var(--color-info)]/5 border border-[var(--color-info)]/20 px-3 py-2 text-xs text-[var(--color-info)]"><Icon name="lucide:info" class="h-4 w-4 shrink-0" /><span>Manual QR is always enabled on the Basic plan. Upgrade to disable it.</span></div>
           </div>
           <div v-else class="space-y-3">
             <div class="flex items-center justify-between rounded-input bg-[var(--color-white)] p-4">
               <div><p class="font-medium text-[var(--color-deep)]">Enable Manual QR</p><p class="text-sm text-[var(--color-titanium)]">Allow customers to pay by sending QR payment proof</p></div>
-              <button v-if="isAdmin" class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="manualPaymentEnabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="manualPaymentEnabled = !manualPaymentEnabled"><span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="manualPaymentEnabled ? 'translate-x-6' : 'translate-x-1'" /></button>
+              <button v-if="isAdmin" role="switch" :aria-checked="manualPaymentEnabled" :aria-label="manualPaymentEnabled ? 'Manual QR enabled' : 'Manual QR disabled'" class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="manualPaymentEnabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="manualPaymentEnabled = !manualPaymentEnabled"><span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="manualPaymentEnabled ? 'translate-x-6' : 'translate-x-1'" /></button>
             </div>
           </div>
         </div>
@@ -637,7 +617,7 @@ onMounted(() => {
                   <p class="font-medium text-[var(--color-deep)]">Send booking confirmation emails</p>
                   <p class="text-sm text-[var(--color-titanium)]">Notify customers when their booking is confirmed</p>
                 </div>
-                <button class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="emailConfirmation ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="emailConfirmation = !emailConfirmation">
+                <button role="switch" :aria-checked="emailConfirmation" :aria-label="emailConfirmation ? 'Booking confirmation emails enabled' : 'Booking confirmation emails disabled'" class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="emailConfirmation ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="emailConfirmation = !emailConfirmation">
                   <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="emailConfirmation ? 'translate-x-6' : 'translate-x-1'" />
                 </button>
               </div>
@@ -648,7 +628,7 @@ onMounted(() => {
                   <p class="font-medium text-[var(--color-deep)]">Send appointment reminder emails</p>
                   <p class="text-sm text-[var(--color-titanium)]">Remind customers before their appointment</p>
                 </div>
-                <button class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="emailReminder ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="emailReminder = !emailReminder">
+                <button role="switch" :aria-checked="emailReminder" :aria-label="emailReminder ? 'Appointment reminder emails enabled' : 'Appointment reminder emails disabled'" class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200" :class="emailReminder ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'" @click="emailReminder = !emailReminder">
                   <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200" :class="emailReminder ? 'translate-x-6' : 'translate-x-1'" />
                 </button>
               </div>

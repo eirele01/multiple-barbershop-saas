@@ -12,7 +12,8 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { TIER_LIMITS } from '~/types/database'
+import { TIER_LIMITS } from '~/constants/tierLimits'
+import { SHOP_STAFF_ROLES } from '~/constants/roles'
 
 const createStaffSchema = z.object({
   display_name: z.string().min(1, 'Full name is required').max(200),
@@ -88,7 +89,7 @@ export default defineEventHandler(async (event) => {
     .from('users')
     .select('id', { count: 'exact', head: true })
     .eq('shop_id', shopId)
-    .in('role', ['admin', 'manager', 'cashier', 'barber'])
+    .in('role', SHOP_STAFF_ROLES)
 
   if (countError) {
     throw createError({ statusCode: 500, statusMessage: 'Failed to check staff count' })

@@ -76,7 +76,7 @@ export const useShopStore = defineStore('shop', {
         if (error) throw error
 
         this.currentShop = data as Shop
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error fetching shop:', error)
         this.currentShop = null
       } finally {
@@ -102,7 +102,7 @@ export const useShopStore = defineStore('shop', {
         if (error) throw error
 
         this.currentShop = data as Shop
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error fetching shop by slug:', error)
         this.currentShop = null
       } finally {

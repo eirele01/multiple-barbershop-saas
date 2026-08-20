@@ -18,6 +18,7 @@ definePageMeta({
 
 const toast = useToast()
 const { confirm, ConfirmDialogComponent } = useConfirm()
+const { authFetch } = useAuthFetch()
 const route = useRoute()
 const shopId = route.params.id as string
 
@@ -50,23 +51,11 @@ const isImpersonating = ref(false)
 const isUpdatingPlan = ref(false)
 const planExpiryDate = ref('')
 
-// ─── Get Auth Token ────────────────────────────────
-async function getAuthToken(): Promise<string | null> {
-  const supabase = useSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token || null
-}
-
 // ─── Fetch Shop Detail ────────────────────────────
 async function fetchShop() {
   isLoading.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch(`/api/super-admin/shops/${shopId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
+    const data = await authFetch(`/api/super-admin/shops/${shopId}`, {}) as any
 
     shop.value = data.shop || null
     owner.value = data.owner || null
@@ -76,9 +65,9 @@ async function fetchShop() {
     if (shop.value?.plan_end_date) {
       planExpiryDate.value = shop.value.plan_end_date.split('T')[0]
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load shop details')
-    console.error('Error fetching shop:', error)
+    console.error('Error fetching shop:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -88,17 +77,12 @@ async function fetchShop() {
 async function fetchStaff() {
   staffLoading.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch(`/api/super-admin/shops/${shopId}/staff`, {
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
+    const data = await authFetch(`/api/super-admin/shops/${shopId}/staff`) as any
 
     staffList.value = data.staff || []
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load staff')
-    console.error('Error fetching staff:', error)
+    console.error('Error fetching staff:', error) // logged to console for debugging
   } finally {
     staffLoading.value = false
   }
@@ -108,18 +92,14 @@ async function fetchStaff() {
 async function fetchBookings() {
   bookingsLoading.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch(`/api/super-admin/shops/${shopId}/bookings`, {
+    const data = await authFetch(`/api/super-admin/shops/${shopId}/bookings`, {
       params: { limit: 50 },
-      headers: { Authorization: `Bearer ${token}` },
     }) as any
 
     bookingsList.value = data.bookings || []
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load bookings')
-    console.error('Error fetching bookings:', error)
+    console.error('Error fetching bookings:', error) // logged to console for debugging
   } finally {
     bookingsLoading.value = false
   }
@@ -154,18 +134,14 @@ async function toggleShopStatus() {
 
   isTogglingStatus.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch(`/api/super-admin/shops/${shopId}/status`, {
+    await authFetch(`/api/super-admin/shops/${shopId}/status`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: { is_active: !shop.value.is_active },
     })
 
     toast.success(`Shop ${action}d successfully`)
     await fetchShop()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || `Failed to ${action} shop`
     toast.error(msg)
   } finally {
@@ -180,19 +156,15 @@ async function impersonateShop() {
 
   isImpersonating.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch(`/api/super-admin/shops/${shopId}/impersonate`, {
+    const data = await authFetch(`/api/super-admin/shops/${shopId}/impersonate`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
     }) as any
 
     if (data.token) {
       window.open(`/admin/dashboard?impersonate=${data.token}`, '_blank')
       toast.success('Opened shop admin in new tab')
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to impersonate'
     toast.error(msg)
   } finally {
@@ -208,19 +180,15 @@ async function updatePlan(plan: 'basic' | 'upgraded') {
 
   isUpdatingPlan.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch(`/api/super-admin/shops/${shopId}/subscription`, {
+    await authFetch(`/api/super-admin/shops/${shopId}/subscription`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: { plan, plan_status: plan === 'upgraded' ? 'active' : undefined },
     })
 
     toast.success(`Shop ${action}d to ${plan} plan`)
     await fetchShop()
     fetchSubscriptionHistory()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || `Failed to ${action} plan`
     toast.error(msg)
   } finally {
@@ -237,18 +205,14 @@ async function setExpiryDate() {
 
   isUpdatingPlan.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch(`/api/super-admin/shops/${shopId}/subscription`, {
+    await authFetch(`/api/super-admin/shops/${shopId}/subscription`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: { plan_end_date: planExpiryDate.value },
     })
 
     toast.success('Expiry date updated')
     await fetchShop()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to update expiry date'
     toast.error(msg)
   } finally {
@@ -257,32 +221,16 @@ async function setExpiryDate() {
 }
 
 // ─── Helpers ───────────────────────────────────────
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
+const { formatPrice, formatTime, formatDate, formatDateTime } = useFormat()
 
-function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
-
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`
+// ─── Keyboard navigation for tabs ────────────────────
+const tabKeysShopDetail = ['overview', 'staff', 'bookings', 'subscription'] as const
+function handleTabKeyShopDetail(e: KeyboardEvent) {
+  const idx = tabKeysShopDetail.indexOf(activeTab.value as any)
+  if (e.key === 'ArrowRight') activeTab.value = tabKeysShopDetail[(idx + 1) % tabKeysShopDetail.length]
+  if (e.key === 'ArrowLeft') activeTab.value = tabKeysShopDetail[(idx - 1 + tabKeysShopDetail.length) % tabKeysShopDetail.length]
+  if (e.key === 'Home') activeTab.value = tabKeysShopDetail[0]
+  if (e.key === 'End') activeTab.value = tabKeysShopDetail[tabKeysShopDetail.length - 1]
 }
 
 onMounted(() => {
@@ -320,24 +268,19 @@ onMounted(() => {
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <span
-            class="badge-pill inline-flex items-center font-medium"
-            :class="shop.plan === 'upgraded'
-              ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-              : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'"
-          >
-            {{ shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-          </span>
+          <PlanBadge :plan="shop.plan" />
           <StatusBadge :status="shop.is_active ? 'active' : 'inactive'" size="md" />
         </div>
       </div>
 
       <!-- Tabs -->
       <div class="card-design overflow-hidden">
-        <div class="flex border-b border-[var(--color-silver)]/30">
+        <div role="tablist" class="flex border-b border-[var(--color-silver)]/30" @keydown.prevent="handleTabKeyShopDetail">
           <button
             v-for="tab in tabs"
             :key="tab.key"
+            role="tab"
+            :aria-selected="activeTab === tab.key"
             class="flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors"
             :class="activeTab === tab.key
               ? 'border-b-2 border-[var(--color-deep)] text-[var(--color-deep)]'
@@ -627,14 +570,7 @@ onMounted(() => {
                 <div>
                   <p class="text-xs font-medium uppercase tracking-wider text-[var(--color-titanium)]">Plan</p>
                   <p class="mt-1">
-                    <span
-                      class="badge-pill inline-flex items-center font-medium"
-                      :class="shop.plan === 'upgraded'
-                        ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                        : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'"
-                    >
-                      {{ shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-                    </span>
+                    <PlanBadge :plan="shop.plan" />
                   </p>
                 </div>
                 <div>

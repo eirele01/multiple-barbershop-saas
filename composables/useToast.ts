@@ -1,6 +1,9 @@
 /**
  * useToast — Lightweight toast notification composable
  *
+ * SSR-safe: uses useState() for hydration, guards timers behind
+ * import.meta.client so setTimeout only runs in the browser.
+ *
  * Usage:
  *   const toast = useToast()
  *   toast.success('Saved!')
@@ -12,21 +15,26 @@ interface ToastMessage {
   id: number
   type: 'success' | 'error' | 'info' | 'warning'
   message: string
-  visible: boolean
 }
 
-const toasts = ref<ToastMessage[]>([])
 let nextId = 0
 
 export function useToast() {
-  function addToast(type: ToastMessage['type'], message: string, duration = 4000) {
-    const id = nextId++
-    const toast: ToastMessage = { id, type, message, visible: true }
-    toasts.value.push(toast)
+  const toasts = useState<ToastMessage[]>('toasts', () => [])
 
-    setTimeout(() => {
-      removeToast(id)
-    }, duration)
+  function addToast(type: ToastMessage['type'], message: string, duration = 4000) {
+    // Toasts are a client-only UI feature — skip during SSR
+    if (import.meta.server) return
+
+    const id = ++nextId
+    toasts.value.push({ id, type, message })
+
+    // Guard timer: only schedule auto-dismiss in the browser
+    if (import.meta.client) {
+      setTimeout(() => {
+        removeToast(id)
+      }, duration)
+    }
   }
 
   function removeToast(id: number) {
@@ -37,7 +45,7 @@ export function useToast() {
   }
 
   return {
-    toasts: readonly(toasts),
+    toasts,
     success: (message: string) => addToast('success', message),
     error: (message: string, duration = 6000) => addToast('error', message, duration),
     info: (message: string) => addToast('info', message),

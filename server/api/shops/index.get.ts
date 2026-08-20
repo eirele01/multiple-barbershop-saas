@@ -28,12 +28,13 @@ export default defineEventHandler(async (event) => {
 
   // If a search query is provided, filter server-side
   if (searchQuery) {
-    // Use ilike on name for partial matching, plus or filters for slug and city
+    // Escape %, _, ), (, = to prevent PostgREST filter injection
+    const safe = searchQuery.replace(/[%_)(=]/g, (c) => `\\${c}`).substring(0, 100)
     const { data: shops, error } = await supabase
       .from('shops')
       .select('slug, name, address_city, logo_url')
       .eq('is_active', true)
-      .or(`name.ilike.%${searchQuery}%,slug.ilike.%${searchQuery}%,address_city.ilike.%${searchQuery}%`)
+      .or(`name.ilike.%${safe}%,slug.ilike.%${safe}%,address_city.ilike.%${safe}%`)
       .order('name', { ascending: true })
 
     if (error) {

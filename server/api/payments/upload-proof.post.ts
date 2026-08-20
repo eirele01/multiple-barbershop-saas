@@ -9,7 +9,9 @@
  * - Returns: { proofUrl }
  */
 import { createClient } from '@supabase/supabase-js'
-import { readMultipartFormData } from 'h3'
+import { readMultipartFormData, getHeader } from 'h3'
+import { z } from 'zod'
+import { proofUploadRateLimiter } from '~/utils/server/rateLimiter'
 
 // Server-side allowed MIME types
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'application/pdf']
@@ -17,13 +19,31 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'application/pdf']
 // Max file size: 5MB
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 
+const uploadProofSchema = z.object({
+  bookingId: z.string().uuid(),
+  shopId: z.string().uuid(),
+  referenceNumber: z.string().max(200).optional(),
+  amountSent: z.string().max(20).optional(),
+})
+
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
+
+  // Rate limiting: 3 uploads per 5 minutes per IP
+  await proofUploadRateLimiter.check(event)
 
   const supabase = createClient(
     config.public.supabaseUrl as string,
     config.supabaseServiceKey as string
   )
+
+        // Auth check — optional.
+  // Authenticated customers must own the booking; guests (no session token)
+  // may still upload a proof for their own booking, relying on the
+  // unguessability of the booking/shop UUIDs + rate limiting as the boundary.
+  const authHeader = getHeader(event, 'authorization')
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : ''
+  const authUser = token ? await verifyAuth(token) : null
 
   // Read multipart form data
   const formData = await readMultipartFormData(event)
@@ -75,24 +95,41 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Validate required fields
-  if (!bookingId || !shopId || !fileData) {
+  // Validate file presence before Zod check (file isn't part of schema)
+  if (!fileData) {
+    throw createError({ statusCode: 400, statusMessage: 'No file attached. A proof image is required.' })
+  }
+
+  // Validate form fields with Zod
+  const parsed = uploadProofSchema.safeParse({ bookingId, shopId, referenceNumber, amountSent })
+  if (!parsed.success) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Missing required fields: bookingId, shopId, and file are required',
+      statusMessage: 'Validation failed',
+      data: parsed.error.flatten().fieldErrors,
     })
   }
+  bookingId = parsed.data.bookingId
+  shopId = parsed.data.shopId
+  referenceNumber = parsed.data.referenceNumber || ''
+  amountSent = parsed.data.amountSent || ''
 
   // 3. Verify the booking exists and belongs to the shop
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, booking_ref, shop_id, status, payment_status')
+    .select('id, booking_ref, shop_id, status, payment_status, customer_id')
     .eq('id', bookingId)
     .eq('shop_id', shopId)
     .single()
 
   if (bookingError || !booking) {
     throw createError({ statusCode: 404, statusMessage: 'Booking not found or does not belong to this shop' })
+  }
+
+        // 3b. Verify ownership — only enforce when an authenticated user is present.
+  //     Guests (token-less) proceed; booking ID + shop ID act as the ownership boundary.
+  if (authUser && booking.customer_id !== authUser.id) {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden: You can only upload proof for your own bookings' })
   }
 
   // 4. Check payment_status — reject re-upload if already verified
@@ -131,18 +168,13 @@ export default defineEventHandler(async (event) => {
     .from('payment-proofs')
     .createSignedUrl(filePath, 3600) // 1-hour expiry for the returned URL
 
-  // Store the public-style URL in DB (we'll extract the path for signed URLs on read)
-  // This keeps backward compatibility — the path can be extracted from this URL
-  const { data: urlData } = supabase.storage
-    .from('payment-proofs')
-    .getPublicUrl(filePath)
+  // Store the storage path in DB (not the public URL) — extract from the upload path
+  const proofPath = uploadData.path // e.g. "payment-proofs/{shopId}/{bookingId}/{filename}"
+  const signedProofUrl = signedData?.signedUrl || ''
 
-  const proofUrl = urlData?.publicUrl || ''
-  const signedProofUrl = signedData?.signedUrl || proofUrl
-
-  // Update booking with proof image URL
+  // Update booking with proof path
   const updateFields: Record<string, any> = {
-    proof_image_url: proofUrl,
+    proof_image_url: proofPath,
     status: 'pending_payment',
     payment_status: 'pending_verification',
   }
@@ -161,8 +193,8 @@ export default defineEventHandler(async (event) => {
   // Update payment_verifications with proof image URL
   await supabase
     .from('payment_verifications')
-    .update({
-      proof_image_url: proofUrl,
+        .update({
+      proof_image_url: proofPath,
       reference_number: referenceNumber || null,
       amount: amountSent ? parseFloat(amountSent) : null,
     })
@@ -175,8 +207,8 @@ export default defineEventHandler(async (event) => {
     action: 'payment.proof_uploaded',
     entity_type: 'booking',
     entity_id: bookingId,
-    entity_name: booking.booking_ref,
-    new_value: { proofUrl, referenceNumber },
+        entity_name: booking.booking_ref,
+    new_value: { proofPath, referenceNumber },
   })
 
   return { proofUrl: signedProofUrl }

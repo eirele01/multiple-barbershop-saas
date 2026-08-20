@@ -16,7 +16,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { JS_DAY_TO_NAME } from '~/utils/dayMapping'
+import { getDayOfWeekName } from '~/utils/server/dateUtils'
 
 const availabilitySchema = z.object({
   shopId: z.string().uuid('Invalid shop ID'),
@@ -75,9 +75,8 @@ export default defineEventHandler(async (event) => {
   }>
   const timezone = shop.timezone || 'Asia/Manila'
 
-  // Determine day of week from the date — use shared dayMapping utility
-  const dateObj = new Date(date + 'T00:00:00')
-  const dayOfWeek = JS_DAY_TO_NAME[dateObj.getDay()]
+  // Determine day of week from the date — timezone-aware
+  const dayOfWeek = getDayOfWeekName(date, timezone)
 
   // Step 3: Check if shop is open on this day
   const dayHours = workingHours.find((wh) => wh.day === dayOfWeek)

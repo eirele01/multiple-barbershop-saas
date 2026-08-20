@@ -102,11 +102,7 @@ async function handleSignOut() {
                 class="flex items-center gap-2 rounded-full p-1 transition-colors hover:bg-[var(--color-silver)]/20"
                 @click="toggleMobileMenu"
               >
-                <div
-                  class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-deep)] text-xs font-bold text-white"
-                >
-                  {{ authStore.displayName?.charAt(0)?.toUpperCase() || 'U' }}
-                </div>
+                <UserAvatar :name="authStore.displayName" size="md" />
                 <span class="hidden text-sm font-medium text-[var(--color-deep)] lg:block">
                   {{ authStore.displayName }}
                 </span>
@@ -168,11 +164,7 @@ async function handleSignOut() {
 
           <template v-else>
             <div class="mb-2 flex items-center gap-3 border-b border-[var(--color-silver)]/30 pb-3">
-              <div
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-deep)] text-sm font-bold text-white"
-              >
-                {{ authStore.displayName?.charAt(0)?.toUpperCase() || 'U' }}
-              </div>
+              <UserAvatar :name="authStore.displayName" size="lg" />
               <div>
                 <p class="text-sm font-medium text-[var(--color-deep)]">
                   {{ authStore.displayName }}

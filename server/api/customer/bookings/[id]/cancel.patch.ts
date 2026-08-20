@@ -14,30 +14,24 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { getToday } from '~/utils/server/dateUtils'
 
 const cancelSchema = z.object({
   cancellation_reason: z.string().min(1, 'Cancellation reason is required').max(500),
 })
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig()
-  const supabase = createClient(
-    config.public.supabaseUrl as string,
-    config.supabaseServiceKey as string
-  )
-
-  // Auth check
   const authHeader = getHeader(event, 'authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : ''
+  const authUser = await verifyAuth(token)
+
+  // Customer-only access
+  if (authUser.role !== 'customer') {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden: Customer access required' })
   }
 
-  const token = authHeader.substring(7)
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-  if (authError || !user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid token' })
-  }
+  const config = useRuntimeConfig()
+  const supabase = useSupabaseAdmin()
 
   // Get booking ID from route
   const bookingId = getRouterParam(event, 'id')
@@ -58,10 +52,10 @@ export default defineEventHandler(async (event) => {
 
   const { cancellation_reason } = parsed.data
 
-  // Fetch the booking
+  // Fetch the booking + shop booking_settings
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('id, booking_ref, status, date, customer_id, shop_id, service_name')
+    .select('id, booking_ref, status, date, start_time, customer_id, shop_id, service_name')
     .eq('id', bookingId)
     .single()
 
@@ -70,7 +64,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Verify ownership
-  if (booking.customer_id !== user.id) {
+  if (booking.customer_id !== authUser.id) {
     throw createError({ statusCode: 403, statusMessage: 'You can only cancel your own bookings' })
   }
 
@@ -79,12 +73,30 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: `Cannot cancel a booking with status '${booking.status}'` })
   }
 
-  // Verify date is in the future
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const bookingDate = new Date(booking.date + 'T00:00:00')
+  // Verify date is in the future (using Asia/Manila timezone)
+  const today = getToday('Asia/Manila')
+  const bookingDate = booking.date
   if (bookingDate < today) {
     throw createError({ statusCode: 409, statusMessage: 'Cannot cancel a past booking' })
+  }
+
+  // Enforce shop's cancellation policy (cancellation_hours)
+  const { data: shopSettings } = await supabase
+    .from('shops')
+    .select('booking_settings, timezone')
+    .eq('id', booking.shop_id)
+    .single()
+
+  const cancellationHours = shopSettings?.booking_settings?.cancellation_hours ?? 0
+  if (cancellationHours > 0) {
+    const appointmentDateTime = new Date(`${booking.date}T${booking.start_time}`)
+    const cutoffTime = new Date(appointmentDateTime.getTime() - cancellationHours * 60 * 60 * 1000)
+    if (new Date() > cutoffTime) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: `This booking can only be cancelled at least ${cancellationHours} hour${cancellationHours > 1 ? 's' : ''} before the appointment.`,
+      })
+    }
   }
 
   // Cancel the booking using service_role
@@ -93,7 +105,7 @@ export default defineEventHandler(async (event) => {
     .update({
       status: 'cancelled',
       cancellation_reason,
-      cancelled_by: user.id,
+      cancelled_by: authUser.id,
       cancelled_at: new Date().toISOString(),
     })
     .eq('id', bookingId)
@@ -106,8 +118,8 @@ export default defineEventHandler(async (event) => {
   // Log to activity_logs
   await supabase.from('activity_logs').insert({
     shop_id: booking.shop_id,
-    user_id: user.id,
-    user_email: user.email || '',
+    user_id: authUser.id,
+    user_email: authUser.email || '',
     user_role: 'customer',
     action: 'booking.cancelled_by_customer',
     entity_type: 'booking',
@@ -124,7 +136,7 @@ export default defineEventHandler(async (event) => {
       bookingRef: booking.booking_ref,
       bookingId: booking.id,
       serviceName: booking.service_name,
-      customer: { email: user.email || '', name: '' },
+      customer: { email: authUser.email || '', name: '' },
     })
   } catch {
     // Email is best-effort; don't fail the cancellation

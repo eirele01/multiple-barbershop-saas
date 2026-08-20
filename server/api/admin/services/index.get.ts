@@ -7,13 +7,14 @@
  * Accessible by: admin, manager, cashier, barber
  */
 import { createClient } from '@supabase/supabase-js'
+import { SHOP_STAFF_ROLES } from '~/constants/roles'
 
 export default defineEventHandler(async (event) => {
   const authHeader = getHeader(event, 'authorization')
   const token = authHeader?.replace('Bearer ', '')
   const authUser = await verifyAuth(token || '')
 
-  if (!['admin', 'manager', 'cashier', 'barber'].includes(authUser.role)) {
+  if (!SHOP_STAFF_ROLES.includes(authUser.role)) {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
   if (!authUser.shop_id) {

@@ -34,10 +34,22 @@ const cancellationReason = ref('')
 const canCancel = computed(() => {
   if (!booking.value) return false
   if (!['pending', 'confirmed', 'pending_payment'].includes(booking.value.status)) return false
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const bookingDate = new Date(booking.value.date + 'T00:00:00')
-  return bookingDate >= today
+
+  const now = new Date()
+
+  // Factor in shop's cancellation_hours if present
+  const cancellationHours = booking.value.bookingSettings?.cancellation_hours ?? 0
+  if (cancellationHours > 0) {
+    const appointmentDateTime = new Date(`${booking.value.date}T${booking.value.start_time}`)
+    const cutoffTime = new Date(appointmentDateTime.getTime() - cancellationHours * 60 * 60 * 1000)
+    return now <= cutoffTime
+  } else {
+    // Fallback: only allow cancellation for future dates
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const bookingDate = new Date(booking.value.date + 'T00:00:00')
+    return bookingDate >= today
+  }
 })
 
 // ─── Fetch Booking ─────────────────────────────────
@@ -45,59 +57,18 @@ async function fetchBooking() {
   isLoading.value = true
   hasError.value = false
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
+    const { authFetch } = useAuthFetch()
+    const data = await authFetch(`/api/customer/bookings/${route.params.id}`) as any
 
-    const bookingId = route.params.id as string
-
-    // Fetch the booking — customer can SELECT their own via RLS
-    const { data, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('id', bookingId)
-      .eq('customer_id', authStore.user?.id)
-      .single()
-
-    if (error || !data) {
+    if (!data) {
       hasError.value = true
       return
     }
 
     booking.value = data
-
-    // Enrich with shop name
-    const { data: shop } = await supabase
-      .from('shops')
-      .select('name, slug')
-      .eq('id', data.shop_id)
-      .single()
-    booking.value.shopName = shop?.name || 'Unknown Shop'
-    booking.value.shopSlug = shop?.slug
-
-    // Enrich with barber name
-    if (data.barber_id) {
-      const { data: barber } = await supabase
-        .from('barbers')
-        .select('user_id')
-        .eq('id', data.barber_id)
-        .single()
-      if (barber?.user_id) {
-        const { data: barberUser } = await supabase
-          .from('users')
-          .select('display_name')
-          .eq('id', barber.user_id)
-          .single()
-        booking.value.barberName = barberUser?.display_name || 'TBD'
-      }
-    } else {
-      booking.value.barberName = 'TBD'
-    }
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load booking')
-    console.error('Error fetching booking:', error)
   } finally {
     isLoading.value = false
   }
@@ -112,14 +83,9 @@ async function cancelBooking() {
 
   isCancelling.value = true
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    await $fetch(`/api/customer/bookings/${route.params.id}/cancel`, {
+    const { authFetch } = useAuthFetch()
+    await authFetch(`/api/customer/bookings/${route.params.id}/cancel`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: {
         cancellation_reason: cancellationReason.value.trim(),
       },
@@ -128,7 +94,7 @@ async function cancelBooking() {
     toast.success('Booking cancelled successfully')
     showCancelDialog.value = false
     await fetchBooking()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to cancel booking'
     toast.error(msg)
   } finally {
@@ -137,24 +103,7 @@ async function cancelBooking() {
 }
 
 // ─── Helpers ───────────────────────────────────────
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
+const { formatPrice, formatTime, formatDate } = useFormat()
 
 function formatPaymentMethod(method: string): string {
   const labels: Record<string, string> = {
@@ -340,8 +289,13 @@ onMounted(() => {
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
         @click.self="showCancelDialog = false"
       >
-        <div class="card-design w-full max-w-md p-6">
-          <h3 class="text-lg font-bold text-[var(--color-deep)]">Cancel Booking</h3>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-dialog-title"
+          class="card-design w-full max-w-md p-6"
+        >
+          <h3 id="cancel-dialog-title" class="text-lg font-bold text-[var(--color-deep)]">Cancel Booking</h3>
           <p class="mt-2 text-sm text-[var(--color-titanium)]">
             Are you sure you want to cancel <span class="font-bold">{{ booking?.booking_ref }}</span>?
             This action cannot be undone.

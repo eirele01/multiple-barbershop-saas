@@ -19,17 +19,10 @@ useHead({
   ],
 })
 
-const allShops = ref<{ slug: string; name: string; city: string | null; logo_url: string | null }[]>([])
+const { data: shopsResponse, error: shopsError } = await useFetch('/api/shops')
+const allShops = computed(() => (shopsResponse.value as any)?.data || [])
 const exampleShops = computed(() => allShops.value.slice(0, 6))
-
-onMounted(async () => {
-  try {
-    const data = await $fetch('/api/shops')
-    allShops.value = (data as any)?.data || []
-  } catch {
-    // Non-critical — fallback to empty list
-  }
-})
+const shopsLoadError = shopsError.value
 </script>
 
 <template>
@@ -214,6 +207,10 @@ onMounted(async () => {
           </div>
 
           <!-- Example shop links -->
+          <div v-if="shopsLoadError" class="rounded-input bg-[var(--color-danger)]/10 p-4 text-sm text-[var(--color-danger)]">
+            <Icon name="lucide:alert-circle" class="mr-2 inline h-4 w-4" />
+            Unable to load shops. Please try again later.
+          </div>
           <p v-if="exampleShops.length" class="mb-3 text-xs font-medium text-[var(--color-titanium)]">Popular shops:</p>
           <div v-if="exampleShops.length" class="flex flex-wrap items-center justify-center gap-2">
             <NuxtLink
@@ -251,7 +248,8 @@ onMounted(async () => {
         </h2>
         <div class="grid gap-8 md:grid-cols-2">
           <!-- Basic Plan -->
-          <div class="card-design p-8">
+          <div class="card-design p-8 flex flex-col justify-between">
+            <div>
             <p class="text-sm font-semibold uppercase tracking-wider text-[var(--color-titanium)]">Basic</p>
             <div class="mt-4 flex items-baseline gap-1">
               <span class="text-4xl font-bold text-[var(--color-deep)]">Free</span>
@@ -286,6 +284,7 @@ onMounted(async () => {
                 Up to 20 gallery images
               </li>
             </ul>
+            </div>
             <NuxtLink
               to="/register"
               class="btn-design mt-8 block w-full rounded-btn border border-[var(--color-deep)] py-3 text-center text-sm font-semibold text-[var(--color-deep)] transition-colors hover:bg-[var(--color-deep)] hover:text-white"
@@ -295,7 +294,8 @@ onMounted(async () => {
           </div>
 
           <!-- Upgraded Plan -->
-          <div class="relative card-design border-2 border-[var(--color-deep)] p-8">
+          <div class="relative card-design border-2 border-[var(--color-deep)] p-8 flex flex-col justify-between">
+            <div>
             <div class="absolute -top-3 right-4">
               <span class="badge-pill bg-[var(--color-deep)] text-xs font-semibold text-white">
                 Recommended
@@ -306,7 +306,7 @@ onMounted(async () => {
               <span class="text-4xl font-bold text-[var(--color-deep)]">Monthly</span>
             </div>
             <p class="mt-2 text-sm text-[var(--color-titanium)]">
-              Unlock the full power of the platform.
+              Contact us for pricing
             </p>
             <ul class="mt-6 space-y-3">
               <li class="flex items-center gap-2 text-sm">
@@ -342,6 +342,7 @@ onMounted(async () => {
                 Priority support
               </li>
             </ul>
+            </div>
             <NuxtLink
               to="/register"
               class="btn-design mt-8 block w-full rounded-btn bg-[var(--color-deep)] py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-[var(--color-titanium)]"

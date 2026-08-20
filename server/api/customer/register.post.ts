@@ -14,17 +14,27 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { authRateLimiter } from '~/utils/server/rateLimiter'
 
 const registerCustomerSchema = z.object({
   first_name: z.string().min(2, 'First name must be at least 2 characters').max(100),
   last_name: z.string().min(2, 'Last name must be at least 2 characters').max(100),
   email: z.string().email('Please provide a valid email address'),
-  phone: z.string().min(1, 'Phone number is required').max(50),
+  phone: z.string()
+    .min(1, 'Phone number is required')
+    .max(50)
+    .refine((val) => {
+      const clean = val.replace(/[\s\-()]/g, '')
+      return /^(09\d{9}|\+639\d{9}|0\d{10})$/.test(clean)
+    }, 'Enter a valid Philippine phone number (e.g., 09171234567 or +639171234567)'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 })
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
+
+  // Rate limiting: 5 requests per 5 minutes per IP
+  await authRateLimiter.check(event, 'customer_register')
 
   // Parse and validate body
   const body = await readBody(event)

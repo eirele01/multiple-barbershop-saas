@@ -42,9 +42,10 @@ export default defineEventHandler(async (event) => {
       .eq('role', 'admin')
       .order('created_at', { ascending: false })
 
-    // Apply search filter
+    // Apply search filter — escape %, _ to prevent SQL injection
     if (search) {
-      ownersQuery = ownersQuery.or(`display_name.ilike.%${search}%,email.ilike.%${search}%`)
+      const safe = search.replace(/[%_]/g, (c) => `\\${c}`)
+      ownersQuery = ownersQuery.or(`display_name.ilike.%${safe}%,email.ilike.%${safe}%`)
     }
 
     // Apply status filter

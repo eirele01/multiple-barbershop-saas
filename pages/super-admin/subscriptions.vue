@@ -9,6 +9,8 @@ definePageMeta({
   middleware: 'super-admin',
 })
 
+const toast = useToast()
+
 // ─── Filters ──────────────────────────────────────────
 const planFilter = ref<'all' | 'basic' | 'upgraded'>('all')
 const statusFilter = ref<'all' | 'active' | 'suspended'>('all')
@@ -51,7 +53,8 @@ async function fetchShops() {
       totalCount.value = data.total ?? 0
     }
   } catch (error) {
-    console.error('Failed to fetch shops:', error)
+    toast.error('Could not load subscription data. Please try again.')
+    console.error('Failed to fetch shops:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -81,14 +84,10 @@ onUnmounted(() => {
 })
 
 // ─── Helpers ──────────────────────────────────────────
+const { formatDate: formatSharedDate } = useFormat()
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—'
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatSharedDate(dateStr)
 }
 </script>
 
@@ -212,16 +211,7 @@ function formatDate(dateStr: string | null): string {
                   </div>
                 </td>
                 <td class="px-6 py-4">
-                  <span
-                    class="badge-pill text-[10px]"
-                    :class="
-                      shop.plan === 'upgraded'
-                        ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                        : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
-                    "
-                  >
-                    {{ shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-                  </span>
+                  <PlanBadge :plan="shop.plan" />
                 </td>
                 <td class="px-6 py-4">
                   <StatusBadge :status="shop.plan_status || 'active'" size="sm" />
@@ -262,15 +252,7 @@ function formatDate(dateStr: string | null): string {
                   <p class="truncate text-[10px] text-[var(--color-titanium)]">{{ shop.ownerEmail || shop.email || '' }}</p>
                 </div>
               </div>
-              <span
-                class="badge-pill shrink-0 text-[10px]"
-                :class="
-                  shop.plan === 'upgraded'
-                    ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                    : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'"
-              >
-                {{ shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-              </span>
+              <PlanBadge :plan="shop.plan" />
             </div>
             <div class="mt-2 flex items-center justify-between text-xs text-[var(--color-titanium)]">
               <div class="flex items-center gap-3">

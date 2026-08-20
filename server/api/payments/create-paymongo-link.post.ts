@@ -53,6 +53,29 @@ export default defineEventHandler(async (event) => {
     config.supabaseServiceKey as string
   )
 
+    // ── Auth check — optional. ──
+  // Authenticated customers must own the booking; guests (no session token)
+  // may still create payment links for their own booking, relying on the
+  // unguessability of the booking/shop UUIDs + rate limiting as the boundary.
+  const authHeader = getHeader(event, 'authorization')
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : ''
+  const authUser = token && token !== 'null' && token !== 'undefined' ? await verifyAuth(token).catch(() => null) : null
+
+  // Fetch booking to verify ownership
+  const { data: bookingOwner, error: bookingOwnerError } = await supabase
+    .from('bookings')
+    .select('id, customer_id')
+    .eq('id', bookingId)
+    .single()
+
+  if (bookingOwnerError || !bookingOwner) {
+    throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
+  }
+
+    if (authUser && bookingOwner.customer_id !== authUser.id) {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden: You can only create payment links for your own bookings' })
+  }
+
   // ── Step 1: Fetch shop with decrypted secret key ──
   const { data: shop, error: shopError } = await supabase
     .from('shops')
@@ -199,7 +222,7 @@ export default defineEventHandler(async (event) => {
 
     // ── Step 8: Return checkout URL ──
     return { checkoutUrl }
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.statusCode) throw error
 
     if (error.name === 'AbortError') {

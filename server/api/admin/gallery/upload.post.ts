@@ -12,7 +12,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { readMultipartFormData } from 'h3'
-import { TIER_LIMITS } from '~/types/database'
+import { TIER_LIMITS } from '~/constants/tierLimits'
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB

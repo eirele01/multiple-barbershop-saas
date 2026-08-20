@@ -12,6 +12,7 @@
  */
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
+import { SHOP_STAFF_ROLES } from '~/constants/roles'
 
 definePageMeta({
   layout: 'admin',
@@ -99,7 +100,7 @@ async function fetchLogs() {
     logs.value = result.logs || []
     totalLogs.value = result.pagination?.total || 0
     retention.value = result.retention || { maxLookbackDays: 7, plan: 'basic', cutoffDate: '', enforcedDateFrom: '' }
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load activity logs')
   } finally {
@@ -118,7 +119,7 @@ async function fetchUsers() {
       .from('users')
       .select('id, display_name, role')
       .eq('shop_id', shopId)
-      .in('role', ['admin', 'manager', 'cashier', 'barber'])
+      .in('role', SHOP_STAFF_ROLES)
       .order('display_name')
 
     if (staffData) {
@@ -130,16 +131,7 @@ async function fetchUsers() {
 }
 
 // ─── Helpers ───────────────────────────────────────
-function formatDateTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-}
+const { formatPrice, formatTime, formatDate, formatDateTime } = useFormat()
 
 function formatRole(role: string): string {
   const labels: Record<string, string> = {

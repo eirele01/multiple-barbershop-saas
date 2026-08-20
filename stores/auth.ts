@@ -7,6 +7,8 @@
  */
 import { defineStore } from 'pinia'
 import type { User, UserRole } from '~/types/database'
+import { SHOP_STAFF_ROLES } from '~/constants/roles'
+import { PERMISSION_MATRIX } from '~/constants/permissions'
 
 interface AuthState {
   user: User | null
@@ -18,6 +20,11 @@ interface AuthState {
   impersonatedShopName: string | null
   impersonatedBy: string | null
 }
+
+// Module-level subscription reference — allows unsubscribing before re-subscribing
+let authSubscription: { unsubscribe: () => void } | null = null
+// Sequence counter to discard stale async profile fetches (prevents out-of-order overwrites)
+let profileFetchSequence = 0
 
 export const useAuthStore = defineStore('auth', {
   state: (): AuthState => ({
@@ -37,20 +44,16 @@ export const useAuthStore = defineStore('auth', {
     isSuperAdmin: (state): boolean => state.user?.role === 'super_admin',
     isAdmin: (state): boolean => state.user?.role === 'admin',
     isShopStaff: (state): boolean =>
-      state.user?.role
-        ? ['admin', 'manager', 'cashier', 'barber'].includes(state.user.role)
-        : false,
+      state.user?.role ? SHOP_STAFF_ROLES.includes(state.user.role as (typeof SHOP_STAFF_ROLES)[number]) : false,
     isCustomer: (state): boolean => state.user?.role === 'customer',
     canAccessAdmin: (state): boolean =>
-      state.user?.role
-        ? ['admin', 'manager', 'cashier', 'barber'].includes(state.user.role)
-        : false,
+      state.user?.role ? SHOP_STAFF_ROLES.includes(state.user.role as (typeof SHOP_STAFF_ROLES)[number]) : false,
     canAccessSuperAdmin: (state): boolean => state.user?.role === 'super_admin',
     displayName: (state): string => state.user?.display_name ?? 'User',
     defaultRedirect(): string {
       if (this.user?.role === 'super_admin') return '/super-admin/dashboard'
       if (this.user?.role === 'customer') return '/customer/dashboard'
-      if (['admin', 'manager', 'cashier', 'barber'].includes(this.user?.role || '')) return '/admin/dashboard'
+      if (SHOP_STAFF_ROLES.includes(this.user?.role as (typeof SHOP_STAFF_ROLES)[number])) return '/admin/dashboard'
       return '/login'
     },
   },
@@ -74,20 +77,41 @@ export const useAuthStore = defineStore('auth', {
           this.accessToken = session.access_token
           await this.fetchUserProfile(session.user.id)
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Error getting session:', err)
       }
 
-      // Listen for auth state changes (token refresh, sign in/out)
-      supabase.auth.onAuthStateChange(async (_event, session) => {
+      // Unsubscribe any existing subscription (prevents stacking on re-init)
+      if (authSubscription) {
+        authSubscription.unsubscribe()
+        authSubscription = null
+      }
+
+      // Listen for auth state changes — callback must be synchronous.
+      // Async profile fetch is guarded by a sequence counter to discard stale results.
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
           this.accessToken = session.access_token
-          await this.fetchUserProfile(session.user.id)
+          this.isAuthenticated = true
+          // Fire-and-forget with sequence guard (not awaited in callback)
+          const seq = ++profileFetchSequence
+          this.fetchUserProfile(session.user.id).then(() => {
+            // If a newer event overwrote us while we were fetching, discard result
+            if (seq !== profileFetchSequence) {
+              // Stale — a newer auth event already triggered its own fetch
+            }
+          })
         } else {
           this.accessToken = null
+          // Invalidate any in-flight profile fetch
+          profileFetchSequence++
           this.clearUser()
         }
       })
+
+      if (subscription) {
+        authSubscription = subscription
+      }
 
       this.isLoading = false
       this.initialized = true
@@ -127,6 +151,16 @@ export const useAuthStore = defineStore('auth', {
       if (data.user) {
         this.accessToken = data.session?.access_token || null
         await this.fetchUserProfile(data.user.id)
+
+        // fetchUserProfile() swallows its own errors (logs + clearUser) and
+        // resolves normally. That made signIn "succeed" even when the user's
+        // profile row couldn't be loaded — handleLogin then showed a false
+        // "Welcome back!" while isAuthenticated stayed false, leaving the
+        // booking wizard stuck on the guest form with a disabled Continue
+        // button. Surface a real error so the login modal can display it.
+        if (!this.isAuthenticated) {
+          throw new Error('Account found, but your profile could not be loaded. Please try again or contact support.')
+        }
       }
     },
 
@@ -171,7 +205,7 @@ export const useAuthStore = defineStore('auth', {
 
       this.accessToken = null
       this.clearUser()
-      await navigateTo('/login')
+      navigateTo('/login')
     },
 
     clearUser() {
@@ -198,7 +232,7 @@ export const useAuthStore = defineStore('auth', {
         } else {
           throw new Error('Invalid or expired impersonation token')
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Impersonation failed:', error)
         throw error
       }
@@ -224,6 +258,11 @@ export const useAuthStore = defineStore('auth', {
       navigateTo('/super-admin/shops')
     },
 
+    resetForHydration() {
+      this.initialized = false
+      this.isLoading = true
+    },
+
     hasPermission(permission: string): boolean {
       if (!this.user) return false
 
@@ -231,84 +270,7 @@ export const useAuthStore = defineStore('auth', {
 
       if (role === 'super_admin') return true
 
-      const permissionMatrix: Record<UserRole, string[]> = {
-        super_admin: ['*'],
-        admin: [
-          'shop.view_dashboard',
-          'shop.edit_settings',
-          'shop.manage_paymongo',
-          'shop.manage_payment_methods',
-          'shop.verify_payments',
-          'shop.view_bookings',
-          'shop.create_booking',
-          'shop.cancel_booking',
-          'staff.add',
-          'staff.edit',
-          'staff.delete',
-          'staff.assign_roles',
-          'cms.services',
-          'cms.gallery',
-          'cms.products',
-          'cms.inventory',
-          'loyalty.configure',
-          'loyalty.view_points',
-          'loyalty.adjust_points',
-          'loyalty.redeem_points',
-          'reports.view_logs',
-          'reports.view_financial',
-          'reports.export',
-        ],
-        manager: [
-          'shop.view_dashboard',
-          'shop.edit_settings',
-          'shop.manage_payment_methods',
-          'shop.verify_payments',
-          'shop.view_bookings',
-          'shop.create_booking',
-          'shop.cancel_booking',
-          'staff.add',
-          'staff.edit',
-          'cms.services',
-          'cms.gallery',
-          'cms.products',
-          'cms.inventory',
-          'loyalty.view_points',
-          'loyalty.adjust_points',
-          'loyalty.redeem_points',
-          'reports.view_logs',
-          'reports.view_financial',
-          'reports.export',
-        ],
-        cashier: [
-          'shop.view_dashboard',
-          'shop.verify_payments',
-          'shop.view_bookings',
-          'shop.create_booking',
-          'shop.cancel_booking',
-          'cms.products',
-          'cms.inventory',
-          'loyalty.view_points',
-          'loyalty.redeem_points',
-          'reports.view_financial',
-        ],
-        barber: [
-          'shop.view_dashboard',
-          'shop.view_bookings',
-          'shop.create_booking',
-          'barber.set_availability',
-          'barber.view_own_bookings',
-          'barber.update_booking_status',
-        ],
-        customer: [
-          'customer.book',
-          'customer.view_bookings',
-          'customer.cancel_booking',
-          'customer.view_loyalty',
-          'customer.redeem_rewards',
-        ],
-      }
-
-      const allowed = permissionMatrix[role] || []
+      const allowed = PERMISSION_MATRIX[role] || []
       return allowed.includes(permission)
     },
   },

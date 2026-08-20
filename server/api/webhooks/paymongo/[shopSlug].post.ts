@@ -7,7 +7,7 @@
  * - Reads RAW request body for HMAC signature verification BEFORE parsing JSON
  * - Uses timingSafeEqual (NOT ===) for signature comparison
  * - Public endpoint — no auth, protected by HMAC signature only
- * - Signature check can be bypassed in NODE_ENV=development for local testing
+ * - Signature bypass only allowed via explicit SKIP_WEBHOOK_VERIFICATION env flag
  *
  * Booking lookup strategy (most reliable first):
  * 1. metadata.booking_id from the PayMongo link (set during link creation)
@@ -16,12 +16,13 @@
  * 4. Fallback: regex extract booking_ref from description/remarks
  *
  * Signature format: "t=timestamp,te=sig1,li=sig2"
- *   Parse the 'te' value and compare against HMAC-SHA256(rawBody, webhookSecret)
+ *   Parse 't' (timestamp) and 'te' (signature), compute HMAC-SHA256 over "{timestamp}.{rawBody}"
  */
 import { createClient } from '@supabase/supabase-js'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { decrypt } from '~/utils/server/encryption'
 import { sendShopEmail } from '~/utils/server/sendShopEmail'
+import { webhookRateLimiter } from '~/utils/server/rateLimiter'
 
 /**
  * Find a booking using multiple fallback strategies.
@@ -92,6 +93,9 @@ async function findBooking(
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
+  // Rate limiting: 60 requests per minute per IP
+  await webhookRateLimiter.check(event)
+
   // ── Read raw body FIRST for signature verification ──
   const rawBody = await readRawBody(event)
 
@@ -134,8 +138,10 @@ export default defineEventHandler(async (event) => {
   // ── Verify webhook signature ──
   const signatureHeader = getHeader(event, 'paymongo-signature')
 
-  if (process.env.NODE_ENV !== 'development') {
-    // Production: enforce signature verification
+  // Use explicit env flag instead of NODE_ENV to avoid accidental dev bypass in prod
+  const skipVerification = process.env.SKIP_WEBHOOK_VERIFICATION === 'true'
+
+  if (!skipVerification) {
     if (!signatureHeader) {
       console.error('[WEBHOOK] Missing paymongo-signature header')
       throw createError({ statusCode: 401, statusMessage: 'Missing signature' })
@@ -155,44 +161,83 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 500, statusMessage: 'Failed to decrypt webhook secret' })
     }
 
-    // Parse signature: "t=timestamp,te=sig1,li=sig2"
+    // Parse the Paymongo-Signature header.
+    // Official format (per paymongo-node SDK): "t=<timestamp>,te=<test_sig>,li=<live_sig>"
+    //   part[0] = "t=<timestamp>"   (Unix epoch seconds)
+    //   part[1] = test-environment signature
+    //   part[2] = live-environment signature
+    // PayMongo always sends BOTH signatures. For a LIVE webhook the test signature
+    // (`te`) is empty and ONLY the live signature (`li`) is populated, so selecting
+    // the test signature alone makes every production webhook fail verification (401)
+    // and bookings never reach `paid`. The official SDK prefers the live signature
+    // when present, so we do the same. Parsing is positional (key-agnostic) so it
+    // also tolerates a Stripe-style "t=<ts>,v1=<sig>" 2-part header.
     const sigParts = signatureHeader.split(',')
-    let teSignature = ''
+    let timestamp = ''
+    const signatureCandidates: string[] = []
     for (const part of sigParts) {
-      const [key, value] = part.split('=')
-      if (key === 'te') {
-        teSignature = value
-        break
+      const eqIndex = part.indexOf('=')
+      if (eqIndex === -1) continue
+      const key = part.substring(0, eqIndex).trim()
+      const value = part.substring(eqIndex + 1).trim()
+      if (key === 't') {
+        timestamp = value
+      } else if (value) {
+        signatureCandidates.push(value)
       }
     }
 
-    if (!teSignature) {
-      console.error('[WEBHOOK] No "te" signature found in header')
+    // Prefer the live signature (last non-empty); fall back to the test signature.
+    const providedSignature = signatureCandidates[signatureCandidates.length - 1]
+
+    if (!providedSignature) {
+      console.error('[WEBHOOK] No signature found in Paymongo-Signature header')
       throw createError({ statusCode: 401, statusMessage: 'Invalid signature format' })
     }
 
-    // Compute HMAC-SHA256 of rawBody with webhookSecret
+    if (!timestamp) {
+      console.error('[WEBHOOK] Missing timestamp in Paymongo-Signature header')
+      throw createError({ statusCode: 401, statusMessage: 'Invalid signature format' })
+    }
+
+    // Timestamp tolerance check — reject if > 5 minutes from server clock
+    if (timestamp) {
+      const webhookTime = parseInt(timestamp, 10)
+      if (!isNaN(webhookTime)) {
+        // PayMongo sends seconds; convert to ms for comparison
+        const diffMs = Math.abs(Date.now() - webhookTime * 1000)
+        if (diffMs > 5 * 60 * 1000) {
+          console.error(`[WEBHOOK] Timestamp too old: ${diffMs}ms difference`)
+          throw createError({ statusCode: 401, statusMessage: 'Timestamp expired' })
+        }
+      }
+    }
+
+    // Ensure rawBody is a string (readRawBody may return Buffer)
+    const rawBodyStr = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8')
+
+    // Compute HMAC-SHA256 over "{timestamp}.{rawBody}" per PayMongo spec
+    const message = `${timestamp}.${rawBodyStr}`
     const computedSig = createHmac('sha256', webhookSecret)
-      .update(rawBody)
+      .update(message)
       .digest('hex')
 
     // Use timingSafeEqual to prevent timing attacks
     try {
       const computedBuf = Buffer.from(computedSig, 'hex')
-      const sigBuf = Buffer.from(teSignature, 'hex')
+      const sigBuf = Buffer.from(providedSignature, 'hex')
 
       if (computedBuf.length !== sigBuf.length || !timingSafeEqual(computedBuf, sigBuf)) {
         console.error('[WEBHOOK] Signature verification failed')
         throw createError({ statusCode: 401, statusMessage: 'Signature verification failed' })
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (e.statusCode) throw e
       console.error('[WEBHOOK] Signature comparison error:', e)
       throw createError({ statusCode: 401, statusMessage: 'Signature verification failed' })
     }
   } else {
-    // Development mode: log that signature check is skipped
-    console.warn('[WEBHOOK] ⚠️ Signature verification BYPASSED (NODE_ENV=development)')
+    console.warn('[WEBHOOK] ⚠️ Signature verification BYPASSED (SKIP_WEBHOOK_VERIFICATION=true)')
   }
 
   // ── Determine event type ──

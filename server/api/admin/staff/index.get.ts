@@ -7,6 +7,7 @@
  * Accessible by: admin, manager
  */
 import { createClient } from '@supabase/supabase-js'
+import { SHOP_STAFF_ROLES } from '~/constants/roles'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -52,7 +53,7 @@ export default defineEventHandler(async (event) => {
     .from('users')
     .select('id, email, display_name, phone_number, photo_url, role, is_active, created_at')
     .eq('shop_id', shopId)
-    .in('role', ['admin', 'manager', 'cashier', 'barber'])
+    .in('role', SHOP_STAFF_ROLES)
     .order('created_at', { ascending: true })
 
   if (usersError) {

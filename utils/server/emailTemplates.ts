@@ -11,6 +11,25 @@
  * Each template function accepts data and returns { subject, html }
  */
 
+// ─── HTML Escape Utility ─────────────────────────────
+
+function htmlEscape(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
+// ─── CSS Safe Color Validator ────────────────────────
+
+function safeColor(color: string): string {
+  // Only allow hex colors (#RGB, #RRGGBB) or empty string
+  if (/^#[0-9a-fA-F]{3,6}$/.test(color)) return color
+  return '#374151' // fallback gray
+}
+
 // ─── Shared Types ─────────────────────────────────────
 
 interface ShopBranding {
@@ -33,15 +52,15 @@ interface EmailResult {
 
 function baseLayout(branding: ShopBranding, contentHtml: string): string {
   const logoHtml = branding.logoUrl
-    ? `<img src="${branding.logoUrl}" alt="${branding.shopName}" width="120" height="120" style="display:block;margin:0 auto 16px auto;border-radius:8px;" />`
+    ? `<img src="${htmlEscape(branding.logoUrl)}" alt="${htmlEscape(branding.shopName)}" width="120" height="120" style="display:block;margin:0 auto 16px auto;border-radius:8px;" />`
     : ''
 
   const mapsLink = (branding.shopLatitude && branding.shopLongitude)
-    ? `<a href="https://www.google.com/maps?q=${branding.shopLatitude},${branding.shopLongitude}" style="color:${branding.primaryColor};text-decoration:underline;" target="_blank">View on Google Maps</a>`
+    ? `<a href="https://www.google.com/maps?q=${branding.shopLatitude},${branding.shopLongitude}" style="color:${safeColor(branding.primaryColor)};text-decoration:underline;" target="_blank">View on Google Maps</a>`
     : ''
 
   const addressLine = branding.shopAddress
-    ? `<p style="margin:4px 0 0 0;font-size:13px;color:#666666;">${branding.shopAddress}</p>`
+    ? `<p style="margin:4px 0 0 0;font-size:13px;color:#666666;">${htmlEscape(branding.shopAddress)}</p>`
     : ''
 
   return `<!DOCTYPE html>
@@ -55,9 +74,9 @@ function baseLayout(branding: ShopBranding, contentHtml: string): string {
 
         <!-- Header with shop logo and name -->
         <tr>
-          <td align="center" style="padding:32px 24px 16px 24px;background-color:${branding.primaryColor};">
+          <td align="center" style="padding:32px 24px 16px 24px;background-color:${safeColor(branding.primaryColor)};">
             ${logoHtml}
-            <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">${branding.shopName}</h1>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">${htmlEscape(branding.shopName)}</h1>
           </td>
         </tr>
 
@@ -89,8 +108,8 @@ function baseLayout(branding: ShopBranding, contentHtml: string): string {
 
 function button(text: string, url: string, color: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px auto;"><tr>
-    <td style="border-radius:6px;background-color:${color};">
-      <a href="${url}" target="_blank" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;">${text}</a>
+    <td style="border-radius:6px;background-color:${safeColor(color)};">
+      <a href="${htmlEscape(url)}" target="_blank" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;">${htmlEscape(text)}</a>
     </td>
   </tr></table>`
 }
@@ -99,8 +118,8 @@ function button(text: string, url: string, color: string): string {
 
 function detailRow(label: string, value: string): string {
   return `<tr>
-    <td style="padding:8px 12px;font-size:14px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;" width="140" valign="top">${label}</td>
-    <td style="padding:8px 12px;font-size:14px;color:#1f2937;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;">${value}</td>
+    <td style="padding:8px 12px;font-size:14px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;" width="140" valign="top">${htmlEscape(label)}</td>
+    <td style="padding:8px 12px;font-size:14px;color:#1f2937;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;">${htmlEscape(value)}</td>
   </tr>`
 }
 
@@ -131,7 +150,7 @@ export function bookingConfirmation(data: BookingConfirmationData): EmailResult 
   const calUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(data.serviceName + ' at ' + data.branding.shopName)}&dates=${calDate}T${calStart}/${calDate}T${calEnd}&details=${encodeURIComponent('Booking ref: ' + data.bookingRef)}`
 
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
     <p style="margin:0 0 20px 0;font-size:16px;color:#1f2937;">Your booking is confirmed!</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:20px;">
@@ -143,14 +162,14 @@ export function bookingConfirmation(data: BookingConfirmationData): EmailResult 
     </table>
 
     <p style="margin:0 0 4px 0;font-size:14px;color:#6b7280;">
-      <a href="${calUrl}" target="_blank" style="color:${data.branding.primaryColor};text-decoration:underline;font-weight:600;">Add to Google Calendar</a>
+      <a href="${calUrl}" target="_blank" style="color:${safeColor(data.branding.primaryColor)};text-decoration:underline;font-weight:600;">Add to Google Calendar</a>
     </p>
 
     ${button('View Booking', `${process.env.NUXT_PUBLIC_SITE_URL || ''}/customer/bookings/${data.bookingId}`, data.branding.primaryColor)}
   `
 
   return {
-    subject: `Booking Confirmed — ${data.serviceName} at ${data.branding.shopName}`,
+    subject: `Booking Confirmed — ${htmlEscape(data.serviceName)} at ${htmlEscape(data.branding.shopName)}`,
     html: baseLayout(data.branding, content),
   }
 }
@@ -176,7 +195,7 @@ export function appointmentReminder(data: AppointmentReminderData): EmailResult 
   const cancelUrl = `${process.env.NUXT_PUBLIC_SITE_URL || ''}/customer/bookings/${data.bookingId}`
 
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
     <p style="margin:0 0 20px 0;font-size:16px;color:#1f2937;">Your appointment is coming up in <strong>${data.hoursBefore} hour${data.hoursBefore !== 1 ? 's' : ''}</strong>!</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:20px;">
@@ -188,11 +207,11 @@ export function appointmentReminder(data: AppointmentReminderData): EmailResult 
 
     ${button('Cancel Appointment', cancelUrl, '#ef4444')}
 
-    ${data.branding.shopPhone ? `<p style="margin:12px 0 0 0;font-size:13px;color:#6b7280;">Need to reach us? Call <strong>${data.branding.shopPhone}</strong></p>` : ''}
+    ${data.branding.shopPhone ? `<p style="margin:12px 0 0 0;font-size:13px;color:#6b7280;">Need to reach us? Call <strong>${htmlEscape(data.branding.shopPhone)}</strong></p>` : ''}
   `
 
   return {
-    subject: `Reminder: ${data.serviceName} in ${data.hoursBefore} hour${data.hoursBefore !== 1 ? 's' : ''} at ${data.branding.shopName}`,
+    subject: `Reminder: ${htmlEscape(data.serviceName)} in ${data.hoursBefore} hour${data.hoursBefore !== 1 ? 's' : ''} at ${htmlEscape(data.branding.shopName)}`,
     html: baseLayout(data.branding, content),
   }
 }
@@ -216,7 +235,7 @@ export interface PaymentVerifiedData {
 
 export function paymentVerified(data: PaymentVerifiedData): EmailResult {
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
     <p style="margin:0 0 20px 0;font-size:16px;color:#1f2937;">Your payment has been verified!</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:16px;">
@@ -236,7 +255,7 @@ export function paymentVerified(data: PaymentVerifiedData): EmailResult {
   `
 
   return {
-    subject: `Payment Confirmed — Booking #${data.bookingRef} at ${data.branding.shopName}`,
+    subject: `Payment Confirmed — Booking #${htmlEscape(data.bookingRef)} at ${htmlEscape(data.branding.shopName)}`,
     html: baseLayout(data.branding, content),
   }
 }
@@ -257,13 +276,13 @@ export function paymentRejected(data: PaymentRejectedData): EmailResult {
   const reuploadUrl = `${process.env.NUXT_PUBLIC_SITE_URL || ''}/shop/${data.shopSlug}/book`
 
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
     <p style="margin:0 0 20px 0;font-size:16px;color:#ef4444;font-weight:600;">We could not verify your payment.</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fecaca;border-radius:6px;overflow:hidden;margin-bottom:20px;background-color:#fef2f2;" bgcolor="#fef2f2">
       <tr>
         <td style="padding:12px 16px;font-size:14px;color:#991b1b;font-family:Arial,Helvetica,sans-serif;">
-          <strong>Reason:</strong> ${data.rejectionReason}
+          <strong>Reason:</strong> ${htmlEscape(data.rejectionReason)}
         </td>
       </tr>
     </table>
@@ -272,11 +291,11 @@ export function paymentRejected(data: PaymentRejectedData): EmailResult {
 
     ${button('Re-upload Payment Proof', reuploadUrl, data.branding.primaryColor)}
 
-    ${data.branding.shopPhone ? `<p style="margin:12px 0 0 0;font-size:13px;color:#6b7280;">Need help? Call <strong>${data.branding.shopPhone}</strong></p>` : ''}
+    ${data.branding.shopPhone ? `<p style="margin:12px 0 0 0;font-size:13px;color:#6b7280;">Need help? Call <strong>${htmlEscape(data.branding.shopPhone)}</strong></p>` : ''}
   `
 
   return {
-    subject: `Payment Issue — Booking #${data.bookingRef} at ${data.branding.shopName}`,
+    subject: `Payment Issue — Booking #${htmlEscape(data.bookingRef)} at ${htmlEscape(data.branding.shopName)}`,
     html: baseLayout(data.branding, content),
   }
 }
@@ -300,14 +319,14 @@ export function bookingCancelled(data: BookingCancelledData): EmailResult {
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fecaca;border-radius:6px;overflow:hidden;margin-bottom:20px;background-color:#fef2f2;" bgcolor="#fef2f2">
         <tr>
           <td style="padding:12px 16px;font-size:14px;color:#991b1b;font-family:Arial,Helvetica,sans-serif;">
-            <strong>Reason:</strong> ${data.cancellationReason}
+            <strong>Reason:</strong> ${htmlEscape(data.cancellationReason)}
           </td>
         </tr>
       </table>`
     : ''
 
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
     <p style="margin:0 0 20px 0;font-size:16px;color:#1f2937;">Your booking has been cancelled.</p>
 
     ${reasonHtml}
@@ -316,7 +335,7 @@ export function bookingCancelled(data: BookingCancelledData): EmailResult {
   `
 
   return {
-    subject: `Booking Cancelled — #${data.bookingRef} at ${data.branding.shopName}`,
+    subject: `Booking Cancelled — #${htmlEscape(data.bookingRef)} at ${htmlEscape(data.branding.shopName)}`,
     html: baseLayout(data.branding, content),
   }
 }
@@ -344,10 +363,10 @@ export function loyaltyPointsEarned(data: LoyaltyPointsEarnedData): EmailResult 
     const progressPercent = totalForNext > 0 ? Math.min(100, Math.round((currentPointsInTier / totalForNext) * 100)) : 0
 
     progressHtml = `
-      <p style="margin:16px 0 6px 0;font-size:13px;color:#6b7280;">Progress toward <strong>${data.nextTier}</strong> tier:</p>
+      <p style="margin:16px 0 6px 0;font-size:13px;color:#6b7280;">Progress toward <strong>${htmlEscape(data.nextTier)}</strong> tier:</p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;height:16px;">
         <tr>
-          <td width="${progressPercent}" style="background-color:${data.branding.primaryColor};font-size:1px;line-height:16px;" bgcolor="${data.branding.primaryColor}">&nbsp;</td>
+          <td width="${progressPercent}" style="background-color:${safeColor(data.branding.primaryColor)};font-size:1px;line-height:16px;" bgcolor="${safeColor(data.branding.primaryColor)}">&nbsp;</td>
           <td width="${100 - progressPercent}" style="background-color:#f3f4f6;font-size:1px;line-height:16px;" bgcolor="#f3f4f6">&nbsp;</td>
         </tr>
       </table>
@@ -364,8 +383,8 @@ export function loyaltyPointsEarned(data: LoyaltyPointsEarnedData): EmailResult 
   const badge = tierBadgeMap[data.currentTier.toLowerCase()] || ''
 
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
-    <p style="margin:0 0 20px 0;font-size:16px;color:#1f2937;">You earned <strong style="color:${data.branding.primaryColor};">${data.pointsEarned} points</strong> this visit!</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
+    <p style="margin:0 0 20px 0;font-size:16px;color:#1f2937;">You earned <strong style="color:${safeColor(data.branding.primaryColor)};">${data.pointsEarned} points</strong> this visit!</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:16px;">
       ${detailRow('Points Earned', `${data.pointsEarned}`)}
@@ -379,7 +398,7 @@ export function loyaltyPointsEarned(data: LoyaltyPointsEarnedData): EmailResult 
   `
 
   return {
-    subject: `You earned ${data.pointsEarned} points at ${data.branding.shopName}!`,
+    subject: `You earned ${data.pointsEarned} points at ${htmlEscape(data.branding.shopName)}!`,
     html: baseLayout(data.branding, content),
   }
 }
@@ -407,15 +426,15 @@ export function loyaltyTierUpgraded(data: LoyaltyTierUpgradedData): EmailResult 
   const tierName = data.newTier.charAt(0).toUpperCase() + data.newTier.slice(1)
 
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
-    <p style="margin:0 0 20px 0;font-size:20px;color:${data.branding.primaryColor};font-weight:700;">You've reached ${tierName} tier!</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
+    <p style="margin:0 0 20px 0;font-size:20px;color:${safeColor(data.branding.primaryColor)};font-weight:700;">You've reached ${tierName} tier!</p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px solid ${data.branding.primaryColor};border-radius:8px;overflow:hidden;margin-bottom:16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px solid ${safeColor(data.branding.primaryColor)};border-radius:8px;overflow:hidden;margin-bottom:16px;">
       <tr>
         <td style="padding:20px;text-align:center;" align="center">
           <p style="margin:0 0 4px 0;font-size:32px;">${badge}</p>
-          <p style="margin:0 0 4px 0;font-size:20px;font-weight:700;color:${data.branding.primaryColor};">${tierName}</p>
-          <p style="margin:0;font-size:14px;color:#6b7280;">Now earning ${data.earnRate}</p>
+          <p style="margin:0 0 4px 0;font-size:20px;font-weight:700;color:${safeColor(data.branding.primaryColor)};">${tierName}</p>
+          <p style="margin:0;font-size:14px;color:#6b7280;">Now earning ${htmlEscape(data.earnRate)}</p>
         </td>
       </tr>
     </table>
@@ -428,7 +447,7 @@ export function loyaltyTierUpgraded(data: LoyaltyTierUpgradedData): EmailResult 
   `
 
   return {
-    subject: `You've reached ${tierName} tier at ${data.branding.shopName}!`,
+    subject: `You've reached ${tierName} tier at ${htmlEscape(data.branding.shopName)}!`,
     html: baseLayout(data.branding, content),
   }
 }
@@ -449,8 +468,8 @@ export function pointsExpiringSoon(data: PointsExpiringSoonData): EmailResult {
   let rewardsHtml = ''
   if (data.topRewards && data.topRewards.length > 0) {
     const rewardRows = data.topRewards.map(r => `<tr>
-      <td style="padding:8px 12px;font-size:14px;color:#1f2937;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;">${r.name}</td>
-      <td style="padding:8px 12px;font-size:14px;color:${data.branding.primaryColor};font-weight:600;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;text-align:right;" align="right">${r.points} pts</td>
+      <td style="padding:8px 12px;font-size:14px;color:#1f2937;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;">${htmlEscape(r.name)}</td>
+      <td style="padding:8px 12px;font-size:14px;color:${safeColor(data.branding.primaryColor)};font-weight:600;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;text-align:right;" align="right">${r.points} pts</td>
     </tr>`).join('')
 
     rewardsHtml = `
@@ -466,14 +485,14 @@ export function pointsExpiringSoon(data: PointsExpiringSoonData): EmailResult {
   }
 
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
     <p style="margin:0 0 20px 0;font-size:16px;color:#d97706;font-weight:600;">${data.pointsExpiring} points are expiring soon!</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fde68a;border-radius:6px;overflow:hidden;margin-bottom:16px;background-color:#fffbeb;" bgcolor="#fffbeb">
       <tr>
         <td style="padding:12px 16px;font-size:14px;color:#92400e;font-family:Arial,Helvetica,sans-serif;">
           <strong>Points Expiring:</strong> ${data.pointsExpiring}<br />
-          <strong>Expiry Date:</strong> ${data.expiryDate}
+          <strong>Expiry Date:</strong> ${htmlEscape(data.expiryDate)}
         </td>
       </tr>
     </table>
@@ -484,7 +503,7 @@ export function pointsExpiringSoon(data: PointsExpiringSoonData): EmailResult {
   `
 
   return {
-    subject: `${data.pointsExpiring} points expiring soon at ${data.branding.shopName}`,
+    subject: `${data.pointsExpiring} points expiring soon at ${htmlEscape(data.branding.shopName)}`,
     html: baseLayout(data.branding, content),
   }
 }
@@ -506,11 +525,11 @@ export function welcomeEmail(data: WelcomeEmailData): EmailResult {
   const bookUrl = `${process.env.NUXT_PUBLIC_SITE_URL || ''}/shop/${data.shopSlug}/book`
 
   const loyaltyHtml = data.loyaltyEnabled && data.welcomeBonusPoints > 0
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px solid ${data.branding.primaryColor};border-radius:8px;overflow:hidden;margin-bottom:16px;">
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px solid ${safeColor(data.branding.primaryColor)};border-radius:8px;overflow:hidden;margin-bottom:16px;">
         <tr>
           <td style="padding:16px;text-align:center;" align="center">
             <p style="margin:0 0 4px 0;font-size:15px;color:#374151;">You've received</p>
-            <p style="margin:0 0 4px 0;font-size:28px;font-weight:700;color:${data.branding.primaryColor};">${data.welcomeBonusPoints} welcome bonus points!</p>
+            <p style="margin:0 0 4px 0;font-size:28px;font-weight:700;color:${safeColor(data.branding.primaryColor)};">${data.welcomeBonusPoints} welcome bonus points!</p>
           </td>
         </tr>
       </table>`
@@ -519,8 +538,8 @@ export function welcomeEmail(data: WelcomeEmailData): EmailResult {
   let servicesHtml = ''
   if (data.topServices && data.topServices.length > 0) {
     const serviceRows = data.topServices.map(s => `<tr>
-      <td style="padding:8px 12px;font-size:14px;color:#1f2937;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;">${s.name}</td>
-      <td style="padding:8px 12px;font-size:14px;color:#374151;font-weight:600;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;text-align:right;" align="right">${s.price}</td>
+      <td style="padding:8px 12px;font-size:14px;color:#1f2937;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;">${htmlEscape(s.name)}</td>
+      <td style="padding:8px 12px;font-size:14px;color:#374151;font-weight:600;font-family:Arial,Helvetica,sans-serif;border-bottom:1px solid #f3f4f6;text-align:right;" align="right">${htmlEscape(s.price)}</td>
     </tr>`).join('')
 
     servicesHtml = `
@@ -532,8 +551,8 @@ export function welcomeEmail(data: WelcomeEmailData): EmailResult {
   }
 
   const content = `
-    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${data.customerName},</p>
-    <p style="margin:0 0 20px 0;font-size:20px;font-weight:700;color:${data.branding.primaryColor};">Welcome to ${data.branding.shopName}!</p>
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
+    <p style="margin:0 0 20px 0;font-size:20px;font-weight:700;color:${safeColor(data.branding.primaryColor)};">Welcome to ${htmlEscape(data.branding.shopName)}!</p>
 
     <p style="margin:0 0 16px 0;font-size:14px;color:#374151;">We're excited to have you. Book your first appointment and experience the best grooming in town.</p>
 
@@ -544,7 +563,7 @@ export function welcomeEmail(data: WelcomeEmailData): EmailResult {
   `
 
   return {
-    subject: `Welcome to ${data.branding.shopName}!`,
+    subject: `Welcome to ${htmlEscape(data.branding.shopName)}!`,
     html: baseLayout(data.branding, content),
   }
 }

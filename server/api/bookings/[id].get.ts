@@ -9,6 +9,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { paymongoVerifyRateLimiter } from '~/utils/server/rateLimiter'
 
 const paramsSchema = z.object({
   id: z.string().uuid('Invalid booking ID'),
@@ -35,6 +36,9 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const params = getRouterParam(event, 'id')
 
+  // Rate limiting: 10 requests per minute per IP (same as PayMongo verify)
+  await paymongoVerifyRateLimiter.check(event, 'bookings_by_id')
+
   const parsed = paramsSchema.safeParse({ id: params })
   if (!parsed.success) {
     throw createError({
@@ -57,9 +61,6 @@ export default defineEventHandler(async (event) => {
       id,
       booking_ref,
       shop_id,
-      customer_id,
-      barber_id,
-      service_id,
       service_name,
       service_price,
       service_duration,
@@ -67,15 +68,11 @@ export default defineEventHandler(async (event) => {
       start_time,
       end_time,
       status,
-      payment_method,
       payment_type,
       payment_status,
       payment_amount,
-      proof_image_url,
       points_earned,
-      points_redeemed,
       discount_applied,
-      customer_notes,
       created_at
     `)
     .eq('id', id)
@@ -83,19 +80,6 @@ export default defineEventHandler(async (event) => {
 
   if (error || !booking) {
     throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
-  }
-
-  // Generate signed URL for proof_image_url (payment-proofs bucket is private)
-  if (booking.proof_image_url) {
-    const storagePath = extractProofStoragePath(booking.proof_image_url)
-    if (storagePath) {
-      const { data: signedData } = await supabase.storage
-        .from('payment-proofs')
-        .createSignedUrl(storagePath, 3600) // 1-hour expiry
-      if (signedData?.signedUrl) {
-        booking.proof_image_url = signedData.signedUrl
-      }
-    }
   }
 
   // Get shop slug for navigation links

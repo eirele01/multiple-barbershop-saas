@@ -18,7 +18,6 @@ export default defineNuxtPlugin(() => {
 
     // Reset the hydration from SSR — the client needs to re-initialize
     // with the actual localStorage session
-    authStore.initialized = false
-    authStore.isLoading = true
+    authStore.resetForHydration()
   }
 })

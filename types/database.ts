@@ -387,32 +387,6 @@ export interface Review {
 }
 
 // ============================================
-// Tier Limit Configuration
-// ============================================
-
-export interface TierLimit {
-  services: number    // Basic: 10, Upgraded: Infinity
-  gallery: number     // Basic: 20, Upgraded: Infinity
-  products: number    // Basic: 10, Upgraded: Infinity
-  staff: number       // Basic: 5, Upgraded: Infinity
-}
-
-export const TIER_LIMITS: Record<SubscriptionPlan, TierLimit> = {
-  basic: {
-    services: 10,
-    gallery: 20,
-    products: 10,
-    staff: 5,
-  },
-  upgraded: {
-    services: Infinity,
-    gallery: Infinity,
-    products: Infinity,
-    staff: Infinity,
-  },
-}
-
-// ============================================
 // Platform Settings
 // ============================================
 

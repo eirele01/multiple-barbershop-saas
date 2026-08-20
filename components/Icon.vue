@@ -5,11 +5,13 @@
  * used throughout the project.
  */
 import * as LucideIcons from 'lucide-vue-next'
+import type { CSSProperties } from 'vue'
+import type { ClassValue } from 'clsx'
 
 const props = defineProps<{
   name: string
-  class?: any
-  style?: any
+  class?: string | ClassValue
+  style?: string | CSSProperties
 }>()
 
 const iconName = computed(() => {
@@ -22,7 +24,7 @@ const iconName = computed(() => {
 })
 
 const iconComponent = computed(() => {
-  const icons = LucideIcons as Record<string, any>
+  const icons = LucideIcons as Record<string, Component | undefined>
   return icons[iconName.value] || null
 })
 </script>

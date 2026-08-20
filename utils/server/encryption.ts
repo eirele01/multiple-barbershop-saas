@@ -13,7 +13,7 @@
  * Null-safe: encrypt/decrypt of null/undefined/'' returns ''
  */
 
-import { createCipheriv, createDecipheriv, randomBytes, createHash, timingSafeEqual } from 'crypto'
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto'
 
 /**
  * Derive a 32-byte AES key from the NUXT_ENCRYPTION_KEY env var.
@@ -103,34 +103,4 @@ export function decrypt(ciphertext: string | null | undefined): string {
   decrypted += decipher.final('utf8')
 
   return decrypted
-}
-
-/**
- * Verify an HMAC-SHA256 signature using timing-safe comparison.
- * Used for PayMongo webhook signature verification.
- *
- * @param payload - The raw body string
- * @param secret - The webhook secret (decrypted)
- * @param signature - The signature to verify (from paymongo-signature header)
- * @returns true if the signature is valid
- */
-export function verifyHmacSignature(
-  payload: string,
-  secret: string,
-  signature: string
-): boolean {
-  const hmac = createHash('sha256')
-    .update(payload)
-    .update(secret)
-    .digest('hex')
-
-  // Use timingSafeEqual to prevent timing attacks
-  const hmacBuf = Buffer.from(hmac, 'hex')
-  const sigBuf = Buffer.from(signature, 'hex')
-
-  if (hmacBuf.length !== sigBuf.length) {
-    return false
-  }
-
-  return timingSafeEqual(hmacBuf, sigBuf)
 }

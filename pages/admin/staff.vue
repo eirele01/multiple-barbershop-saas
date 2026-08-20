@@ -15,7 +15,7 @@ import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
 import { checkTierLimit } from '~/utils/tierLimits'
 import type { Barber, BarberSchedule, BarberTimeOff, Service, UserRole } from '~/types/database'
-import { TIER_LIMITS } from '~/types/database'
+import { TIER_LIMITS } from '~/constants/tierLimits'
 
 definePageMeta({
   layout: 'admin',
@@ -28,6 +28,7 @@ definePageMeta({
 const authStore = useAuthStore()
 const shopStore = useShopStore()
 const toast = useToast()
+const { authFetch } = useAuthFetch()
 
 // ─── State ────────────────────────────────────────────
 interface StaffMember {
@@ -136,12 +137,7 @@ const TIME_OPTIONS = (() => {
   return options
 })()
 
-function formatTime(t: string): string {
-  const [h, m] = t.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour12 = h > 12 ? h - 12 : h === 0 ? 12 : h
-  return `${hour12}:${m.toString().padStart(2, '0')} ${period}`
-}
+const { formatTime } = useFormat()
 
 // ─── Init ────────────────────────────────────────────
 onMounted(async () => {
@@ -152,21 +148,12 @@ onMounted(async () => {
   await Promise.all([fetchStaff(), fetchServices()])
 })
 
-// ─── Auth token helper ───────────────────────────────
-async function getAuthToken(): Promise<string> {
-  const supabase = useSupabase()
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token || ''
-}
-
 // ─── Fetch staff ─────────────────────────────────────
 async function fetchStaff() {
   isLoading.value = true
   hasError.value = false
   try {
-    const data = await $fetch('/api/admin/staff', {
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
-    })
+    const data = await authFetch('/api/admin/staff')
     staff.value = (data as any)?.data || []
   } catch {
     hasError.value = true
@@ -292,13 +279,12 @@ async function uploadPhoto(): Promise<string | null> {
     const formData = new FormData()
     formData.append('file', photoFile.value)
 
-    const response = await $fetch<{ url: string }>('/api/admin/staff/upload-photo', {
+    const response = await authFetch<{ url: string }>('/api/admin/staff/upload-photo', {
       method: 'POST',
       body: formData,
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     return response.url
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to upload photo')
     return null
   } finally {
@@ -415,24 +401,22 @@ async function saveStaff() {
     }
 
     if (isEditing.value && editingId.value) {
-      await $fetch(`/api/admin/staff/${editingId.value}`, {
+      await authFetch(`/api/admin/staff/${editingId.value}`, {
         method: 'PATCH',
         body: payload,
-        headers: { Authorization: `Bearer ${await getAuthToken()}` },
       })
       toast.success('Staff member updated')
     } else {
-      await $fetch('/api/admin/staff', {
+      await authFetch('/api/admin/staff', {
         method: 'POST',
         body: payload,
-        headers: { Authorization: `Bearer ${await getAuthToken()}` },
       })
       toast.success('Staff member added')
     }
 
     isPanelOpen.value = false
     await fetchStaff()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to save staff member')
   } finally {
     isSaving.value = false
@@ -445,18 +429,17 @@ async function saveSchedule() {
 
   isSaving.value = true
   try {
-    await $fetch(`/api/admin/staff/${editingId.value}/schedule`, {
+    await authFetch(`/api/admin/staff/${editingId.value}/schedule`, {
       method: 'PATCH',
       body: {
         schedule: form.value.schedule,
         time_off: form.value.time_off,
       },
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Schedule updated')
     isPanelOpen.value = false
     await fetchStaff()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to save schedule')
   } finally {
     isSaving.value = false
@@ -473,15 +456,14 @@ function confirmDeactivate(member: StaffMember) {
 async function handleDeactivate() {
   if (!confirmTarget.value) return
   try {
-    await $fetch(`/api/admin/staff/${confirmTarget.value.user_id}`, {
+    await authFetch(`/api/admin/staff/${confirmTarget.value.user_id}`, {
       method: 'PATCH',
       body: { is_active: !confirmTarget.value.is_active },
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success(confirmTarget.value.is_active ? 'Staff member deactivated' : 'Staff member activated')
     showConfirmDialog.value = false
     await fetchStaff()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to update status')
   }
 }
@@ -497,14 +479,13 @@ function confirmDelete(member: StaffMember) {
 async function handleDelete() {
   if (!confirmTarget.value) return
   try {
-    await $fetch(`/api/admin/staff/${confirmTarget.value.user_id}`, {
+    await authFetch(`/api/admin/staff/${confirmTarget.value.user_id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Staff member removed')
     showConfirmDialog.value = false
     await fetchStaff()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to remove staff member')
   }
 }

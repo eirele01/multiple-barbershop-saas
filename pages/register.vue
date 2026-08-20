@@ -160,6 +160,9 @@ function canProceedToStep3(): boolean {
   const shopOk = validateShopName()
   if (!shopOk) return false
   if (!shopSlug.value || !phoneNumber.value || !city.value) return false
+  // Validate phone format
+  const phoneClean = phoneNumber.value.replace(/[\s\-()]/g, '')
+  if (!/^(09\d{9}|\+639\d{9}|0\d{10})$/.test(phoneClean)) return false
   if (!isSlugValid.value) return false
   return true
 }
@@ -210,7 +213,7 @@ async function handleRegister() {
       // Redirect to verify-email page (email_confirm is false)
       await router.push(`/auth/verify-email?email=${encodeURIComponent(emailAddress.value)}`)
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     const data = error?.data
     if (data?.message) {
       errorMessage.value = data.message

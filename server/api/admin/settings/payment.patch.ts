@@ -158,7 +158,7 @@ export default defineEventHandler(async (event) => {
     if (newKey && newKey !== MASKED_SECRET_KEY && newKey.trim() !== '') {
       try {
         updateData.paymongo_secret_key = encrypt(newKey.trim())
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Encryption error for paymongo_secret_key:', e.message)
         throw createError({
           statusCode: 500,
@@ -175,7 +175,7 @@ export default defineEventHandler(async (event) => {
     if (newSecret && newSecret !== MASKED_WEBHOOK_SECRET && newSecret.trim() !== '') {
       try {
         updateData.paymongo_webhook_secret = encrypt(newSecret.trim())
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Encryption error for paymongo_webhook_secret:', e.message)
         throw createError({
           statusCode: 500,

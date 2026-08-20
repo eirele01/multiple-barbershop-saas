@@ -21,6 +21,7 @@ definePageMeta({
 
 const toast = useToast()
 const { confirm, ConfirmDialogComponent } = useConfirm()
+const { authFetch } = useAuthFetch()
 
 // ─── State ────────────────────────────────────────
 const isLoading = ref(true)
@@ -43,35 +44,24 @@ const resetLink = ref('')
 const resetOwnerName = ref('')
 const copiedToClipboard = ref(false)
 
-// ─── Get Auth Token ────────────────────────────────
-async function getAuthToken(): Promise<string | null> {
-  const supabase = useSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token || null
-}
-
 // ─── Fetch Owners ─────────────────────────────────
 async function fetchOwners() {
   isLoading.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch('/api/super-admin/owners', {
+    const data = await authFetch('/api/super-admin/owners', {
       params: {
         search: searchQuery.value || undefined,
         status: filterStatus.value || undefined,
         page: page.value,
         limit: perPage,
       },
-      headers: { Authorization: `Bearer ${token}` },
     }) as any
 
     owners.value = data.owners || []
     totalOwners.value = data.total || 0
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load shop owners')
-    console.error('Error fetching owners:', error)
+    console.error('Error fetching owners:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -85,18 +75,14 @@ async function toggleOwnerStatus(ownerId: string, currentActive: boolean) {
 
   isToggling.value = ownerId
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch(`/api/super-admin/owners/${ownerId}/status`, {
+    await authFetch(`/api/super-admin/owners/${ownerId}/status`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: { is_active: !currentActive },
     })
 
     toast.success(`Owner ${action}d successfully`)
     await fetchOwners()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || `Failed to ${action} owner`
     toast.error(msg)
   } finally {
@@ -112,18 +98,14 @@ async function resetPassword(ownerId: string, ownerName: string) {
   isResettingPassword.value = ownerId
   copiedToClipboard.value = false
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch(`/api/super-admin/owners/${ownerId}/reset-password`, {
+    const data = await authFetch(`/api/super-admin/owners/${ownerId}/reset-password`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
     }) as any
 
     resetLink.value = data.resetLink || data.reset_link || ''
     resetOwnerName.value = ownerName
     showResetModal.value = true
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to generate reset link'
     toast.error(msg)
   } finally {
@@ -157,24 +139,7 @@ function resetFilters() {
 }
 
 // ─── Helpers ───────────────────────────────────────
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function formatDateTime(dateStr: string): string {
-  if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
+const { formatPrice, formatTime, formatDate, formatDateTime } = useFormat()
 
 function getInitial(name: string): string {
   return name ? name.charAt(0).toUpperCase() : '?'
@@ -308,15 +273,7 @@ onMounted(() => {
               </td>
               <!-- Plan -->
               <td class="px-4 py-3 text-center">
-                <span
-                  v-if="owner.shop?.plan"
-                  class="badge-pill inline-flex items-center font-medium"
-                  :class="owner.shop.plan === 'upgraded'
-                    ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                    : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'"
-                >
-                  {{ owner.shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-                </span>
+                <PlanBadge v-if="owner.shop?.plan" :plan="owner.shop.plan" />
                 <span v-else class="text-[var(--color-titanium)]">—</span>
               </td>
               <!-- Registered -->
@@ -403,15 +360,7 @@ onMounted(() => {
                 {{ owner.shop.name || 'View Shop' }}
               </NuxtLink>
               <span v-else>No shop</span>
-              <span
-                v-if="owner.shop?.plan"
-                class="badge-pill text-[10px]"
-                :class="owner.shop.plan === 'upgraded'
-                  ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                  : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'"
-              >
-                {{ owner.shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-              </span>
+              <PlanBadge v-if="owner.shop?.plan" :plan="owner.shop.plan" />
             </div>
             <span>{{ formatDate(owner.createdAt || owner.created_at) }}</span>
           </div>

@@ -52,13 +52,11 @@ onMounted(() => {
           </NuxtLink>
 
           <!-- User Avatar — only render after mount to avoid hydration mismatch -->
-          <button
+          <UserAvatar
             v-if="isMounted"
-            class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-deep)] text-xs font-bold text-white"
-            @click="authStore.signOut()"
-          >
-            {{ authStore.displayName?.charAt(0)?.toUpperCase() || 'U' }}
-          </button>
+            :name="authStore.displayName"
+            size="md"
+          />
           <div v-else class="h-8 w-8 rounded-full bg-[var(--color-deep)]" />
         </div>
       </div>

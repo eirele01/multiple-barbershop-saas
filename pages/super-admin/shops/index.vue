@@ -21,6 +21,7 @@ definePageMeta({
 
 const toast = useToast()
 const { confirm, ConfirmDialogComponent } = useConfirm()
+const { authFetch } = useAuthFetch()
 
 // ─── State ────────────────────────────────────────
 const isLoading = ref(true)
@@ -39,21 +40,11 @@ const filterDateTo = ref('')
 // Action states
 const isToggling = ref<string | null>(null)
 
-// ─── Get Auth Token ────────────────────────────────
-async function getAuthToken(): Promise<string | null> {
-  const supabase = useSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token || null
-}
-
 // ─── Fetch Shops ──────────────────────────────────
 async function fetchShops() {
   isLoading.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch('/api/super-admin/shops', {
+    const data = await authFetch('/api/super-admin/shops', {
       params: {
         search: searchQuery.value || undefined,
         plan: filterPlan.value || undefined,
@@ -63,14 +54,13 @@ async function fetchShops() {
         page: page.value,
         limit: perPage,
       },
-      headers: { Authorization: `Bearer ${token}` },
     }) as any
 
     shops.value = data.shops || []
     totalShops.value = data.total || 0
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load shops')
-    console.error('Error fetching shops:', error)
+    console.error('Error fetching shops:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -84,18 +74,14 @@ async function toggleShopStatus(shopId: string, currentActive: boolean) {
 
   isToggling.value = shopId
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch(`/api/super-admin/shops/${shopId}/status`, {
+    await authFetch(`/api/super-admin/shops/${shopId}/status`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: { is_active: !currentActive },
     })
 
     toast.success(`Shop ${action}d successfully`)
     await fetchShops()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || `Failed to ${action} shop`
     toast.error(msg)
   } finally {
@@ -120,17 +106,7 @@ function resetFilters() {
 }
 
 // ─── Helpers ───────────────────────────────────────
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
+const { formatPrice, formatDate } = useFormat()
 
 function getInitial(name: string): string {
   return name ? name.charAt(0).toUpperCase() : '?'
@@ -294,14 +270,7 @@ onMounted(() => {
               <td class="px-4 py-3 text-[var(--color-deep)]">{{ shop.owner_email || '—' }}</td>
               <!-- Plan -->
               <td class="px-4 py-3 text-center">
-                <span
-                  class="badge-pill inline-flex items-center font-medium"
-                  :class="shop.plan === 'upgraded'
-                    ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                    : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'"
-                >
-                  {{ shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-                </span>
+                <PlanBadge :plan="shop.plan" />
               </td>
               <!-- Status -->
               <td class="px-4 py-3 text-center">
@@ -380,14 +349,7 @@ onMounted(() => {
           <p class="truncate font-mono text-[10px] text-[var(--color-silver)]">/{{ shop.slug }}</p>
           <div class="mt-2 flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <span
-                class="badge-pill text-[10px]"
-                :class="shop.plan === 'upgraded'
-                  ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                  : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'"
-              >
-                {{ shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-              </span>
+              <PlanBadge :plan="shop.plan" />
               <span class="text-xs text-[var(--color-titanium)]">{{ shop.total_bookings ?? 0 }} bookings</span>
             </div>
             <div class="flex items-center gap-1">

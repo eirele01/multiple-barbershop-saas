@@ -101,10 +101,10 @@ async function fetchRewards() {
     }) as LoyaltyReward[]
 
     rewards.value = response || []
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load rewards')
-    console.error('Error fetching rewards:', error)
+    console.error('Error fetching rewards:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -186,10 +186,10 @@ async function saveReward() {
 
     resetForm()
     await fetchRewards()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to save reward'
     toast.error(message)
-    console.error('Error saving reward:', error)
+    console.error('Error saving reward:', error) // logged to console for debugging
   } finally {
     isSaving.value = false
   }
@@ -213,9 +213,9 @@ async function deleteReward(reward: LoyaltyReward) {
 
     toast.success('Reward deleted')
     await fetchRewards()
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to delete reward')
-    console.error('Error deleting reward:', error)
+    console.error('Error deleting reward:', error) // logged to console for debugging
   }
 }
 
@@ -406,6 +406,9 @@ onMounted(() => {
             <p class="text-sm text-[var(--color-titanium)]">Make this reward available for redemption</p>
           </div>
           <button
+            role="switch"
+            :aria-checked="formIsActive"
+            :aria-label="formIsActive ? 'Reward active' : 'Reward inactive'"
             class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
             :class="formIsActive ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'"
             @click="formIsActive = !formIsActive"
