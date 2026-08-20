@@ -257,16 +257,16 @@ export async function getCustomerTotalEarned(
 }
 
 /**
- * Insert a loyalty_points ledger record.
+ * Insert a loyalty_points ledger entry using PostgreSQL advisory locks.
  *
- * balance_after is calculated from the SUM-based getCustomerBalance() + this transaction,
- * ensuring accuracy regardless of insertion order.
+ * Delegates to the `loyalty_earn_points()` SQL function which acquires a
+ * per-shop advisory lock before reading/modifying the balance. This prevents
+ * race conditions when concurrent requests award or redeem points simultaneously.
  *
  * @param shopId - The shop's UUID
  * @param customerId - The customer's UUID
  * @param type - The transaction type
  * @param points - Number of points (always positive; type indicates direction)
- * @param currentBalance - The balance BEFORE this transaction (from getCustomerBalance)
  * @param options - Additional fields (booking_id, reward_id, note, expires_at)
  * @returns The new balance_after
  */
@@ -275,7 +275,7 @@ async function insertLedgerEntry(
   customerId: string,
   type: LoyaltyPointsType,
   points: number,
-  currentBalance: number,
+  _currentBalance: number, // kept for API compat, not used — SQL function recalculates
   options: {
     bookingId?: string | null
     rewardId?: string | null
@@ -285,24 +285,15 @@ async function insertLedgerEntry(
 ): Promise<number> {
   const supabase = getAdminClient()
 
-  let balanceAfter: number
-  if (type === 'earned' || type === 'welcome_bonus' || type === 'adjusted') {
-    balanceAfter = currentBalance + points
-  } else {
-    // redeemed, expired — deduct
-    balanceAfter = Math.max(0, currentBalance - points)
-  }
-
-  const { error } = await supabase.from('loyalty_points').insert({
-    shop_id: shopId,
-    customer_id: customerId,
-    booking_id: options.bookingId || null,
-    reward_id: options.rewardId || null,
-    type,
-    points,
-    balance_after: balanceAfter,
-    note: options.note || null,
-    expires_at: options.expiresAt || null,
+  const { data, error } = await supabase.rpc('loyalty_earn_points', {
+    p_shop_id: shopId,
+    p_customer_id: customerId,
+    p_type: type,
+    p_points: points,
+    p_booking_id: options.bookingId || null,
+    p_reward_id: options.rewardId || null,
+    p_note: options.note || null,
+    p_expires_at: options.expiresAt || null,
   })
 
   if (error) {
@@ -310,7 +301,7 @@ async function insertLedgerEntry(
     throw new Error('Failed to insert loyalty_points record: ' + error.message)
   }
 
-  return balanceAfter
+  return data as number
 }
 
 /**
@@ -361,7 +352,7 @@ export async function awardPoints(
     )
 
     return { success: true, points, balanceAfter }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[LOYALTY-ENGINE] Error awarding points:', error)
     return { success: false, error: error.message }
   }
@@ -410,7 +401,7 @@ export async function redeemPoints(
     )
 
     return { success: true, points, balanceAfter }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[LOYALTY-ENGINE] Error redeeming points:', error)
     return { success: false, error: error.message }
   }
@@ -454,7 +445,7 @@ export async function refundRedeemedPoints(
     )
 
     return { success: true, points, balanceAfter }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[LOYALTY-ENGINE] Error refunding redeemed points:', error)
     return { success: false, error: error.message }
   }
@@ -481,22 +472,6 @@ export async function awardWelcomeBonus(
   }
 
   try {
-    const supabase = getAdminClient()
-
-    // Uniqueness check: only one welcome_bonus per shop-customer pair
-    const { data: existing } = await supabase
-      .from('loyalty_points')
-      .select('id')
-      .eq('shop_id', shopId)
-      .eq('customer_id', customerId)
-      .eq('type', 'welcome_bonus')
-      .limit(1)
-
-    if (existing && existing.length > 0) {
-      // Welcome bonus already awarded — skip silently
-      return { success: true, points: 0, balanceAfter: await getCustomerBalance(shopId, customerId) }
-    }
-
     const currentBalance = await getCustomerBalance(shopId, customerId)
 
     // Calculate expiry date for welcome bonus
@@ -521,7 +496,12 @@ export async function awardWelcomeBonus(
     )
 
     return { success: true, points: bonusPoints, balanceAfter }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    // Unique constraint violation means welcome bonus already awarded — safe to skip
+    const msg = error.message || ''
+    if (msg.includes('duplicate key') || msg.includes('idx_loyalty_points_welcome_bonus_unique')) {
+      return { success: true, points: 0, balanceAfter: await getCustomerBalance(shopId, customerId) }
+    }
     console.error('[LOYALTY-ENGINE] Error awarding welcome bonus:', error)
     return { success: false, error: error.message }
   }
@@ -578,7 +558,7 @@ export async function adjustPoints(
       )
       return { success: true, points: absPoints, balanceAfter }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[LOYALTY-ENGINE] Error adjusting points:', error)
     return { success: false, error: error.message }
   }

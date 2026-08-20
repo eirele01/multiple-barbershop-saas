@@ -164,7 +164,8 @@ async function loadMoreReviews() {
     allReviews.value = [...allReviews.value, ...result.reviews]
     hasMoreReviews.value = result.pagination.hasMore
   } catch (err) {
-    console.error('Failed to load more reviews:', err)
+    toast.error('Could not load more reviews. Please try again.')
+    console.error('Failed to load more reviews:', err) // logged to console for debugging
   } finally {
     isLoadingMoreReviews.value = false
   }
@@ -235,12 +236,7 @@ const sortedHours = computed(() => {
 })
 
 // ── Format time (09:00 → 9:00 AM) ──
-function formatTime(time: string): string {
-  const [hours, minutes] = time.split(':').map(Number)
-  const period = hours >= 12 ? 'PM' : 'AM'
-  const displayHours = hours % 12 || 12
-  return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`
-}
+const { formatTime } = useFormat()
 
 // ── Star rating display ──
 function getStarArray(rating: number): ('full' | 'half' | 'empty')[] {
@@ -285,6 +281,34 @@ const filteredReviews = computed(() => {
   }
   return allReviews.value
 })
+
+// ── Keyboard navigation for tab lists ──
+function handleTabKeyServiceCat(e: KeyboardEvent) {
+  const cats = serviceCategories.value
+  const idx = cats.indexOf(selectedCategory.value)
+  if (e.key === 'ArrowRight') selectedCategory.value = cats[(idx + 1) % cats.length]
+  if (e.key === 'ArrowLeft') selectedCategory.value = cats[(idx - 1 + cats.length) % cats.length]
+  if (e.key === 'Home') selectedCategory.value = cats[0]
+  if (e.key === 'End') selectedCategory.value = cats[cats.length - 1]
+}
+
+function handleTabKeyGallery(e: KeyboardEvent) {
+  const cats = galleryCategories.value
+  const idx = cats.indexOf(galleryFilter.value)
+  if (e.key === 'ArrowRight') galleryFilter.value = cats[(idx + 1) % cats.length]
+  if (e.key === 'ArrowLeft') galleryFilter.value = cats[(idx - 1 + cats.length) % cats.length]
+  if (e.key === 'Home') galleryFilter.value = cats[0]
+  if (e.key === 'End') galleryFilter.value = cats[cats.length - 1]
+}
+
+function handleTabKeyReview(e: KeyboardEvent) {
+  const opts = ['all', '5', '4', '3']
+  const idx = opts.indexOf(reviewFilter.value)
+  if (e.key === 'ArrowRight') reviewFilter.value = opts[(idx + 1) % opts.length]
+  if (e.key === 'ArrowLeft') reviewFilter.value = opts[(idx - 1 + opts.length) % opts.length]
+  if (e.key === 'Home') reviewFilter.value = opts[0]
+  if (e.key === 'End') reviewFilter.value = opts[opts.length - 1]
+}
 
 // ── Relative time formatting ──
 function relativeTime(dateStr: string): string {
@@ -559,6 +583,7 @@ const currentDayName = computed(() => {
     '--glass-bg-hover': glassBgHover,
     '--glass-border': glassBorder,
     '--glass-border-hover': glassBorderHover,
+    '--safe-text': safeTextColor,
   }">
     <div v-if="route.name === 'shop-slug'">
       <!-- ══════════════════════════════════════════
@@ -769,7 +794,7 @@ const currentDayName = computed(() => {
             <p class="mt-3 text-sm text-[var(--text-muted)]">Professional grooming services tailored for you</p>
           </div>
           <!-- ARIA tablist for category filter -->
-          <div v-if="serviceCategories.length > 2" class="mb-8 flex flex-wrap items-center justify-center gap-2" role="tablist">
+          <div v-if="serviceCategories.length > 2" class="mb-8 flex flex-wrap items-center justify-center gap-2" role="tablist" @keydown.prevent="handleTabKeyServiceCat">
             <button v-for="cat in serviceCategories" :key="cat" role="tab" :aria-selected="selectedCategory === cat" class="min-h-[44px] rounded-full px-4 py-1.5 text-xs font-medium transition-all border" :class="selectedCategory === cat ? '' : 'bg-white/5 text-[var(--text-muted)] border-white/10 hover:bg-white/10 hover-brand-border-30'" :style="selectedCategory === cat ? { backgroundColor: primaryColor, color: safeTextColor, borderColor: primaryColor } : {}" @click="selectedCategory = cat">
               {{ cat === 'all' ? 'All' : (categoryLabels[cat] || cat) }}
             </button>
@@ -802,7 +827,7 @@ const currentDayName = computed(() => {
                     <span v-if="service.category === 'package'" class="text-xs font-normal text-[var(--text-muted)]">Starting from </span>
                     ₱{{ service.price.toLocaleString() }}
                   </span>
-                  <NuxtLink :to="`/shop/${slug}/book?service=${service.id}`" class="inline-flex translate-y-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 group-hover:translate-y-0 hover:opacity-90 sm:ml-2 brand-text hover:text-[var(--text-primary)] hover-brand-bg">
+                  <NuxtLink :to="`/shop/${slug}/book?service=${service.id}`" class="inline-flex translate-y-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 group-hover:translate-y-0 hover:opacity-90 sm:ml-2 brand-text hover-safe-text hover-brand-bg">
                     Book Now <Icon name="lucide:arrow-right" class="h-3 w-3" />
                   </NuxtLink>
                 </div>
@@ -939,7 +964,7 @@ const currentDayName = computed(() => {
             <p class="mt-3 text-sm text-[var(--text-muted)]">See our work and style</p>
           </div>
           <!-- Gallery filter pills -->
-          <div v-if="galleryCategories.length > 2" class="mb-8 flex flex-wrap items-center justify-center gap-2" role="tablist">
+          <div v-if="galleryCategories.length > 2" class="mb-8 flex flex-wrap items-center justify-center gap-2" role="tablist" @keydown.prevent="handleTabKeyGallery">
             <button v-for="cat in galleryCategories" :key="cat" role="tab" :aria-selected="galleryFilter === cat" class="min-h-[44px] rounded-full px-4 py-1.5 text-xs font-medium transition-all border" :class="galleryFilter === cat ? 'brand-bg text-[#0D0D0D] brand-border' : 'bg-white/5 text-[var(--text-muted)] border-white/10 hover:bg-white/10 hover-brand-border-30'" @click="galleryFilter = cat">{{ cat === 'all' ? 'All' : cat }}</button>
           </div>
           <!-- Gallery grid -->
@@ -1025,7 +1050,7 @@ const currentDayName = computed(() => {
               <!-- Reviews list -->
               <div class="space-y-4 lg:col-span-2">
                 <!-- Review filter tabs -->
-                <div class="flex flex-wrap gap-2" role="tablist">
+                <div class="flex flex-wrap gap-2" role="tablist" @keydown.prevent="handleTabKeyReview">
                   <button v-for="opt in [{ val: 'all', label: 'All Stars' }, { val: '5', label: '5\u2605' }, { val: '4', label: '4\u2605' }, { val: '3', label: '3\u2605' }]" :key="opt.val" role="tab" :aria-selected="reviewFilter === opt.val" class="min-h-[44px] rounded-full px-3 py-1 text-xs font-medium transition-all border" :class="reviewFilter === opt.val ? '' : 'bg-white/5 text-[var(--text-muted)] border-white/10 hover:bg-white/10 hover-brand-border-30'" :style="reviewFilter === opt.val ? { backgroundColor: primaryColor, color: safeTextColor, borderColor: primaryColor } : {}" @click="reviewFilter = opt.val">{{ opt.label }}</button>
                 </div>
                 <!-- Individual review cards -->
@@ -1477,6 +1502,7 @@ const currentDayName = computed(() => {
 .hover-brand-shadow-color-40:hover { --tw-shadow-color: rgba(var(--brand-r), var(--brand-g), var(--brand-b), 0.4); }
 .hover-brand-shadow-15:hover { box-shadow: 0 8px 32px rgba(var(--brand-r), var(--brand-g), var(--brand-b), 0.15); }
 .hover-brand-glow-30:hover { box-shadow: 0 0 20px rgba(var(--brand-r), var(--brand-g), var(--brand-b), 0.3); }
+.hover-safe-text:hover { color: var(--safe-text); }
 
 /* ── Group-hover state brand utilities ── */
 .group:hover .gh-brand-text { color: var(--brand); }

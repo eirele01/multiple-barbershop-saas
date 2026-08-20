@@ -14,6 +14,7 @@
  */
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
+import { useAuthFetch } from '~/composables/useAuthFetch'
 
 definePageMeta({
   layout: 'admin',
@@ -23,6 +24,7 @@ definePageMeta({
 const authStore = useAuthStore()
 const shopStore = useShopStore()
 const toast = useToast()
+const { authFetch } = useAuthFetch()
 
 // ─── State ──────────────────────────────────────────
 const isLoading = ref(true)
@@ -68,26 +70,12 @@ const isAdmin = computed(() => authStore.role === 'admin')
 const displayLogoUrl = computed(() => logoPreview.value || logoUrl.value)
 const displayCoverUrl = computed(() => coverPreview.value || coverUrl.value)
 
-// ─── Helper: Get auth token ─────────────────────────
-function getAuthToken(): string | null {
-  return authStore.accessToken
-}
-
 // ─── Fetch Shop Profile ────────────────────────────
 async function fetchProfile() {
   isLoading.value = true
   loadError.value = false
   try {
-    const token = getAuthToken()
-    if (!token) {
-      loadError.value = true
-      return
-    }
-
-    const response = await $fetch('/api/admin/shop/profile', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
+    const response = await authFetch('/api/admin/shop/profile') as any
 
     shopName.value = response.name || ''
     shopSlug.value = response.slug || ''
@@ -108,10 +96,10 @@ async function fetchProfile() {
     plan.value = response.plan || 'basic'
     logoUrl.value = response.logo_url || null
     coverUrl.value = response.cover_image_url || null
-  } catch (error: any) {
+  } catch (error: unknown) {
     loadError.value = true
     toast.error('Failed to load shop profile')
-    console.error('Error fetching shop profile:', error)
+    console.error('Error fetching shop profile:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -152,15 +140,11 @@ async function uploadLogo() {
 
   isUploadingLogo.value = true
   try {
-    const token = getAuthToken()
-    if (!token) return
-
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await $fetch('/api/admin/shop/upload-logo', {
+    const response = await authFetch('/api/admin/shop/upload-logo', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: formData,
     }) as any
 
@@ -170,7 +154,7 @@ async function uploadLogo() {
 
     // Refresh shop store
     await shopStore.loadCurrentShop()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to upload logo'
     toast.error(message)
   } finally {
@@ -221,15 +205,11 @@ async function uploadCover() {
 
   isUploadingCover.value = true
   try {
-    const token = getAuthToken()
-    if (!token) return
-
     const formData = new FormData()
     formData.append('file', file)
 
-    const response = await $fetch('/api/admin/shop/upload-cover', {
+    const response = await authFetch('/api/admin/shop/upload-cover', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
       body: formData,
     }) as any
 
@@ -239,7 +219,7 @@ async function uploadCover() {
 
     // Refresh shop store
     await shopStore.loadCurrentShop()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to upload cover image'
     toast.error(message)
   } finally {
@@ -263,9 +243,6 @@ async function saveProfile() {
 
   isSaving.value = true
   try {
-    const token = getAuthToken()
-    if (!token) return
-
     const payload: Record<string, any> = {
       name: shopName.value.trim(),
       description: shopDescription.value.trim() || null,
@@ -285,9 +262,8 @@ async function saveProfile() {
       cover_image_url: coverUrl.value,
     }
 
-    await $fetch('/api/admin/shop/profile', {
+    await authFetch('/api/admin/shop/profile', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: payload,
     })
 
@@ -295,10 +271,10 @@ async function saveProfile() {
 
     // Refresh shop store
     await shopStore.loadCurrentShop()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to save shop profile'
     toast.error(message)
-    console.error('Error saving shop profile:', error)
+    console.error('Error saving shop profile:', error) // logged to console for debugging
   } finally {
     isSaving.value = false
   }

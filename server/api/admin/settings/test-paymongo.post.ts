@@ -142,7 +142,7 @@ export default defineEventHandler(async (event) => {
       console.error('[test-paymongo] API returned error:', response.status, errorData)
       return { valid: false, error: errorMessage }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[test-paymongo] Fetch error:', error.name, error.message)
 
     if (error.name === 'AbortError') {

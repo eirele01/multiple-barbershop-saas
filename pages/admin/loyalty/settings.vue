@@ -68,10 +68,10 @@ async function fetchSettings() {
     if (response.loyalty_tiers) {
       tiers.value = response.loyalty_tiers
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     loadError.value = true
     toast.error('Failed to load loyalty settings')
-    console.error('Error fetching loyalty settings:', error)
+    console.error('Error fetching loyalty settings:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -102,10 +102,10 @@ async function saveSettings() {
 
     toast.success('Loyalty settings saved successfully')
     await shopStore.loadCurrentShop()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to save loyalty settings'
     toast.error(message)
-    console.error('Error saving loyalty settings:', error)
+    console.error('Error saving loyalty settings:', error) // logged to console for debugging
   } finally {
     isSaving.value = false
   }
@@ -175,6 +175,9 @@ onMounted(() => {
             <p class="text-sm text-[var(--color-titanium)]">Allow customers to earn and redeem loyalty points</p>
           </div>
           <button
+            role="switch"
+            :aria-checked="loyaltyEnabled"
+            :aria-label="loyaltyEnabled ? 'Loyalty program enabled' : 'Loyalty program disabled'"
             class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
             :class="loyaltyEnabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'"
             @click="loyaltyEnabled = !loyaltyEnabled"
@@ -268,6 +271,9 @@ onMounted(() => {
             <p class="text-sm text-[var(--color-titanium)]">Higher tiers earn points faster with multipliers</p>
           </div>
           <button
+            role="switch"
+            :aria-checked="tiersEnabled"
+            :aria-label="tiersEnabled ? 'Tiers enabled' : 'Tiers disabled'"
             class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
             :class="tiersEnabled ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]'"
             @click="tiersEnabled = !tiersEnabled"

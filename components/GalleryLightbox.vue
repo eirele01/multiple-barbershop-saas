@@ -35,6 +35,7 @@ const touchEndX = ref(0)
 
 // Watch for external open/close
 watch(() => props.modelValue, (val) => {
+  if (!import.meta.client) return
   if (val) {
     currentIndex.value = props.initialIndex || 0
     // Prevent body scroll when lightbox is open

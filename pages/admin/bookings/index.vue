@@ -173,10 +173,10 @@ async function fetchBookings() {
         }
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load bookings')
-    console.error('Error fetching bookings:', error)
+    console.error('Error fetching bookings:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -211,28 +211,12 @@ async function fetchBarbers() {
       }
     }
   } catch (error) {
-    console.error('Error fetching barbers:', error)
+    toast.error('Could not load barber filter options.')
+    console.error('Error fetching barbers:', error) // logged to console for debugging
   }
 }
 
-// ─── Helpers ───────────────────────────────────────
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
+const { formatPrice, formatTime, formatDate, formatDateTime } = useFormat()
 
 const totalPages = computed(() => Math.ceil(totalBookings.value / perPage))
 

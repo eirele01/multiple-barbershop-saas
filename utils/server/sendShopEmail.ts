@@ -209,7 +209,7 @@ export async function sendShopEmail(
     console.log(`[EMAIL] Sent "${template}" to ${recipientEmail} for shop ${shopId}`)
     return { sent: true }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[EMAIL] Unexpected error in sendShopEmail:', error)
     return { sent: false, error: error.message || 'unknown_error' }
   }

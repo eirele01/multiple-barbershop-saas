@@ -49,9 +49,9 @@ async function fetchTransactions() {
 
     transactions.value = response.transactions || []
     totalTx.value = response.total || 0
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load transactions')
-    console.error('Error fetching transactions:', error)
+    console.error('Error fetching transactions:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -79,14 +79,9 @@ function txPrefix(type: string): string {
   return '-'
 }
 
+const { formatDate: formatSharedDate } = useFormat()
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatSharedDate(dateStr)
 }
 
 function onFilterChange() {

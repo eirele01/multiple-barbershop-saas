@@ -12,6 +12,7 @@
 
 import draggable from 'vuedraggable'
 import { useAuthStore } from '~/stores/auth'
+import { useAuthFetch } from '~/composables/useAuthFetch'
 import type { PaymentMethod, PaymentMethodCategory } from '~/types/database'
 
 definePageMeta({
@@ -24,6 +25,7 @@ definePageMeta({
 
 const authStore = useAuthStore()
 const toast = useToast()
+const { authFetch } = useAuthFetch()
 
 // ─── State ────────────────────────────────────────────
 const methods = ref<PaymentMethod[]>([])
@@ -75,21 +77,13 @@ onMounted(() => {
 async function fetchMethods() {
   isLoading.value = true
   try {
-    const data = await $fetch('/api/admin/payment-methods', {
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
-    })
+    const data = await authFetch('/api/admin/payment-methods')
     methods.value = (data as any)?.data || []
   } catch (e) {
     toast.error('Failed to load payment methods')
   } finally {
     isLoading.value = false
   }
-}
-
-async function getAuthToken(): Promise<string> {
-  const supabase = useSupabase()
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token || ''
 }
 
 // ─── Type selector labels ─────────────────────────────
@@ -169,14 +163,13 @@ async function uploadQrImage(): Promise<string | null> {
     const formData = new FormData()
     formData.append('file', qrFile.value)
 
-    const response = await $fetch<{ url: string }>('/api/admin/payment-methods/upload-qr', {
+    const response = await authFetch<{ url: string }>('/api/admin/payment-methods/upload-qr', {
       method: 'POST',
       body: formData,
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
 
     return response.url
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to upload QR image')
     return null
   } finally {
@@ -240,25 +233,23 @@ async function saveMethod() {
 
     if (isEditing.value && editingId.value) {
       // Update
-      await $fetch(`/api/admin/payment-methods/${editingId.value}`, {
+      await authFetch(`/api/admin/payment-methods/${editingId.value}`, {
         method: 'PATCH',
         body: payload,
-        headers: { Authorization: `Bearer ${await getAuthToken()}` },
       })
       toast.success('Payment method updated')
     } else {
       // Create
-      await $fetch('/api/admin/payment-methods', {
+      await authFetch('/api/admin/payment-methods', {
         method: 'POST',
         body: payload,
-        headers: { Authorization: `Bearer ${await getAuthToken()}` },
       })
       toast.success('Payment method created')
     }
 
     isPanelOpen.value = false
     await fetchMethods()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to save payment method')
   } finally {
     isSaving.value = false
@@ -268,14 +259,13 @@ async function saveMethod() {
 // ─── Toggle Active ───────────────────────────────────
 async function toggleActive(method: PaymentMethod) {
   try {
-    await $fetch(`/api/admin/payment-methods/${method.id}`, {
+    await authFetch(`/api/admin/payment-methods/${method.id}`, {
       method: 'PATCH',
       body: { is_active: !method.is_active },
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     await fetchMethods()
     toast.success(method.is_active ? 'Payment method deactivated' : 'Payment method activated')
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to toggle status')
   }
 }
@@ -291,14 +281,13 @@ async function handleDelete() {
   if (!deleteTarget.value) return
 
   try {
-    await $fetch(`/api/admin/payment-methods/${deleteTarget.value.id}`, {
+    await authFetch(`/api/admin/payment-methods/${deleteTarget.value.id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Payment method deleted')
     showDeleteDialog.value = false
     await fetchMethods()
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (e.statusCode === 409) {
       deleteError.value = e.data?.statusMessage || 'This payment method has been used in existing bookings.'
     } else {
@@ -323,10 +312,9 @@ function onReorderEnd() {
     sort_order: index,
   }))
 
-  $fetch('/api/admin/payment-methods/reorder', {
+  authFetch('/api/admin/payment-methods/reorder', {
     method: 'PATCH',
     body: { items },
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
   }).catch((e) => {
     toast.error('Failed to save reorder')
     fetchMethods() // Revert

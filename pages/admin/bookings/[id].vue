@@ -23,6 +23,7 @@ definePageMeta({
 const authStore = useAuthStore()
 const shopStore = useShopStore()
 const toast = useToast()
+const { authFetch } = useAuthFetch()
 const route = useRoute()
 const bookingId = route.params.id as string
 
@@ -90,37 +91,26 @@ async function fetchBooking() {
         barberName.value = barberUser?.display_name || 'Unknown'
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load booking')
-    console.error('Error fetching booking:', error)
+    console.error('Error fetching booking:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
-}
-
-// ─── Get Auth Token ────────────────────────────────
-async function getAuthToken(): Promise<string | null> {
-  const supabase = useSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token || null
 }
 
 // ─── Actions ───────────────────────────────────────
 async function markInProgress() {
   isActioning.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch(`/api/admin/bookings/${bookingId}/status`, {
+    await authFetch(`/api/admin/bookings/${bookingId}/status`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: { status: 'in_progress' },
     })
 
     toast.success('Booking marked as in progress')
     await fetchBooking()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to update status'
     toast.error(msg)
   } finally {
@@ -131,12 +121,8 @@ async function markInProgress() {
 async function markComplete() {
   isActioning.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const result = await $fetch(`/api/admin/bookings/${bookingId}/complete`, {
+    const result = await authFetch(`/api/admin/bookings/${bookingId}/complete`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
     }) as any
 
     toast.success(result.pointsAwarded > 0
@@ -144,7 +130,7 @@ async function markComplete() {
       : 'Booking completed'
     )
     await fetchBooking()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to complete booking'
     toast.error(msg)
   } finally {
@@ -157,18 +143,14 @@ async function markNoShow() {
   if (!ok) return
   isActioning.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch(`/api/admin/bookings/${bookingId}/status`, {
+    await authFetch(`/api/admin/bookings/${bookingId}/status`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: { status: 'no_show' },
     })
 
     toast.success('Booking marked as no show')
     await fetchBooking()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to update status'
     toast.error(msg)
   } finally {
@@ -183,12 +165,8 @@ async function cancelBooking() {
   }
   isActioning.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch(`/api/admin/bookings/${bookingId}/status`, {
+    await authFetch(`/api/admin/bookings/${bookingId}/status`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: {
         status: 'cancelled',
         cancellationReason: cancelReason.value.trim(),
@@ -199,7 +177,7 @@ async function cancelBooking() {
     showCancelModal.value = false
     cancelReason.value = ''
     await fetchBooking()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to cancel booking'
     toast.error(msg)
   } finally {
@@ -207,25 +185,7 @@ async function cancelBooking() {
   }
 }
 
-// ─── Helpers ───────────────────────────────────────
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-}
-
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
+const { formatPrice, formatTime, formatDate, formatDateTime } = useFormat()
 
 const isUpgraded = computed(() => shopStore.isUpgradedPlan)
 

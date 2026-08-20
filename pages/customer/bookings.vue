@@ -34,19 +34,23 @@ const tabs = [
   { key: 'cancelled' as const, label: 'Cancelled', icon: 'lucide:calendar-x' },
 ]
 
+// ─── Keyboard navigation for tabs ─────────────────────
+const tabKeysBookings = ['upcoming', 'past', 'cancelled'] as const
+function handleTabKeyBookings(e: KeyboardEvent) {
+  const idx = tabKeysBookings.indexOf(activeTab.value as any)
+  if (e.key === 'ArrowRight') activeTab.value = tabKeysBookings[(idx + 1) % tabKeysBookings.length] as 'upcoming' | 'past' | 'cancelled'
+  if (e.key === 'ArrowLeft') activeTab.value = tabKeysBookings[(idx - 1 + tabKeysBookings.length) % tabKeysBookings.length] as 'upcoming' | 'past' | 'cancelled'
+  if (e.key === 'Home') activeTab.value = tabKeysBookings[0] as 'upcoming' | 'past' | 'cancelled'
+  if (e.key === 'End') activeTab.value = tabKeysBookings[tabKeysBookings.length - 1] as 'upcoming' | 'past' | 'cancelled'
+}
+
 // ─── Fetch Bookings ────────────────────────────────
 async function fetchBookings() {
   isLoading.value = true
   hasError.value = false
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    const response = await $fetch('/api/customer/bookings', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+    const { authFetch } = useAuthFetch()
+    const response = await authFetch('/api/customer/bookings', {
       params: {
         tab: activeTab.value,
         page: page.value,
@@ -56,10 +60,9 @@ async function fetchBookings() {
 
     bookings.value = response.bookings || []
     totalBookings.value = response.total || 0
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load bookings')
-    console.error('Error fetching bookings:', error)
   } finally {
     isLoading.value = false
   }
@@ -73,24 +76,7 @@ function switchTab(tab: 'upcoming' | 'past' | 'cancelled') {
 }
 
 // ─── Helpers ───────────────────────────────────────
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
+const { formatPrice, formatTime, formatDate } = useFormat()
 
 const totalPages = computed(() => Math.ceil(totalBookings.value / perPage))
 
@@ -110,10 +96,13 @@ onMounted(() => {
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-1 rounded-btn bg-[var(--color-silver)]/10 p-1">
+    <div role="tablist" class="flex gap-1 rounded-btn bg-[var(--color-silver)]/10 p-1" @keydown.prevent="handleTabKeyBookings">
       <button
         v-for="tab in tabs"
         :key="tab.key"
+        role="tab"
+        :aria-selected="activeTab === tab.key"
+        :aria-controls="'bookings-panel'"
         class="flex flex-1 items-center justify-center gap-2 rounded-btn px-4 py-2.5 text-sm font-medium transition-colors"
         :class="activeTab === tab.key
           ? 'bg-[var(--color-deep)] text-white'

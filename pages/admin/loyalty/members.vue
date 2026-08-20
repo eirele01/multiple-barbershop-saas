@@ -54,9 +54,9 @@ async function fetchMembers() {
 
     members.value = response.members || []
     totalMembers.value = response.total || 0
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load loyalty members')
-    console.error('Error fetching members:', error)
+    console.error('Error fetching members:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -97,7 +97,7 @@ async function submitAdjustment() {
     toast.success(`Points adjusted for ${adjustMemberName.value}`)
     showAdjustModal.value = false
     await fetchMembers()
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error?.data?.statusMessage || error?.message || 'Failed to adjust points'
     toast.error(message)
   } finally {

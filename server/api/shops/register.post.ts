@@ -16,6 +16,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { authRateLimiter } from '~/utils/server/rateLimiter'
 
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -44,6 +45,9 @@ const DEFAULT_WORKING_HOURS = [
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const body = await readBody(event)
+
+  // Rate limiting: 5 requests per 5 minutes per IP
+  await authRateLimiter.check(event, 'shop_register')
 
   // 1. Validate input
   const parsed = registerSchema.safeParse(body)

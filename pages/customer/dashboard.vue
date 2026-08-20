@@ -54,15 +54,8 @@ async function fetchDashboard() {
   isLoading.value = true
   hasError.value = false
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    const response = await $fetch('/api/customer/dashboard', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
+    const { authFetch } = useAuthFetch()
+    const response = await authFetch('/api/customer/dashboard') as any
 
     upcomingBookings.value = (response.upcomingBookings || []).map((b: any) => ({
       id: b.id,
@@ -81,34 +74,16 @@ async function fetchDashboard() {
 
     loyaltyShops.value = response.loyalty?.shops || []
     totalPoints.value = response.loyalty?.totalPoints || 0
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load dashboard')
-    console.error('Error fetching dashboard:', error)
   } finally {
     isLoading.value = false
   }
 }
 
 // ─── Helpers ───────────────────────────────────────
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
+const { formatPrice, formatTime, formatDate } = useFormat()
 
 onMounted(() => {
   if (authStore.isAuthenticated) {
@@ -170,7 +145,7 @@ onMounted(() => {
         </div>
 
         <!-- Loyalty Points Card -->
-        <div v-if="totalPoints > 0" class="card-design p-6">
+        <div class="card-design p-6">
           <div class="flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-btn bg-[var(--color-warning)]/10">
               <Icon name="lucide:star" class="h-5 w-5 text-[var(--color-warning)]" />
@@ -178,6 +153,7 @@ onMounted(() => {
             <div>
               <p class="text-xs font-medium uppercase tracking-wider text-[var(--color-titanium)]">Loyalty Points</p>
               <p class="text-2xl font-bold text-[var(--color-deep)]">{{ totalPoints }}</p>
+              <p v-if="totalPoints === 0" class="text-xs text-[var(--color-titanium)]">Book your first appointment to earn points</p>
             </div>
           </div>
         </div>

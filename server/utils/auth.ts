@@ -12,6 +12,8 @@
  *   - On Vercel serverless, eliminating 1 of 2 round trips cuts latency significantly
  */
 import { createClient } from '@supabase/supabase-js'
+import { useSupabaseAdmin } from '~/server/utils/supabase'
+import { SHOP_STAFF_ROLES, SETTINGS_ADMIN_ROLES, PAYMENT_VERIFICATION_ROLES } from '~/constants/roles'
 
 export interface AuthUser {
   id: string
@@ -65,18 +67,8 @@ export async function verifyAuth(token: string): Promise<AuthUser> {
   }
 
   // Fetch user profile from the users table
-  // Use service_role key to bypass RLS and avoid another auth check
-  const supabaseAdmin = createClient(
-    config.public.supabaseUrl as string,
-    config.supabaseServiceKey as string,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    }
-  )
+  // Use centralized admin client to bypass RLS and avoid another auth check
+  const supabaseAdmin = useSupabaseAdmin()
 
   const { data: profile, error: profileError } = await supabaseAdmin
     .from('users')
@@ -106,7 +98,7 @@ export async function verifyAuth(token: string): Promise<AuthUser> {
  */
 export function requireShopStaff(
   user: AuthUser,
-  allowedRoles: string[] = ['admin', 'manager', 'cashier', 'barber']
+  allowedRoles: string[] = SHOP_STAFF_ROLES
 ): void {
   if (!allowedRoles.includes(user.role)) {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
@@ -120,7 +112,16 @@ export function requireShopStaff(
  * Verify admin/manager role access.
  */
 export function requireAdminOrManager(user: AuthUser): void {
-  requireShopStaff(user, ['admin', 'manager'])
+  requireShopStaff(user, SETTINGS_ADMIN_ROLES)
+}
+
+/**
+ * Verify payment verification role access (admin, manager, cashier).
+ */
+export function requirePaymentVerification(user: AuthUser): void {
+  if (!PAYMENT_VERIFICATION_ROLES.includes(user.role)) {
+    throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
+  }
 }
 
 /**

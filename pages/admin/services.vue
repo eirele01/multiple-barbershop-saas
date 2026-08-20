@@ -9,7 +9,7 @@
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
 import type { Service, ServiceCategory } from '~/types/database'
-import { TIER_LIMITS } from '~/types/database'
+import { TIER_LIMITS } from '~/constants/tierLimits'
 
 definePageMeta({
   layout: 'admin',
@@ -20,6 +20,7 @@ const authStore = useAuthStore()
 const shopStore = useShopStore()
 const toast = useToast()
 const { confirm, ConfirmDialogComponent } = useConfirm()
+const { authFetch } = useAuthFetch()
 
 // ─── State ────────────────────────────────────────
 const services = ref<Service[]>([])
@@ -78,25 +79,16 @@ const categories: Array<{ value: ServiceCategory; label: string; icon: string }>
   { value: 'other', label: 'Other', icon: 'lucide:more-horizontal' },
 ]
 
-// ─── Auth token helper ──────────────────────────
-async function getAuthToken(): Promise<string> {
-  const supabase = useSupabase()
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token || ''
-}
-
 // ─── Fetch services ──────────────────────────────
 async function fetchServices() {
   isLoading.value = true
   fetchError.value = false
   try {
-    const token = await getAuthToken()
-    const response = await $fetch<{ data: Service[] }>('/api/admin/services', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const response = await authFetch<{ data: Service[] }>('/api/admin/services')
     services.value = response.data || []
   } catch (err) {
-    console.error('Error fetching services:', err)
+    toast.error('Could not load services. Please try again.')
+    console.error('Error fetching services:', err) // logged to console for debugging
     fetchError.value = true
   } finally {
     isLoading.value = false
@@ -106,7 +98,6 @@ async function fetchServices() {
 // ─── Fetch barbers for assignment ────────────────
 async function fetchBarbers() {
   try {
-    const token = await getAuthToken()
     const supabase = useSupabase()
     const { data, error } = await supabase
       .from('barbers')
@@ -120,7 +111,8 @@ async function fetchBarbers() {
       name: b.user?.display_name || 'Unknown',
     }))
   } catch (err) {
-    console.error('Error fetching barbers:', err)
+    toast.error('Could not load barber list for assignment.')
+    console.error('Error fetching barbers:', err) // logged to console for debugging
   }
 }
 
@@ -200,14 +192,13 @@ async function uploadImage(): Promise<string | null> {
     const formData = new FormData()
     formData.append('file', imageFile.value)
 
-    const response = await $fetch<{ url: string }>('/api/admin/services/upload-image', {
+    const response = await authFetch<{ url: string }>('/api/admin/services/upload-image', {
       method: 'POST',
       body: formData,
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
 
     return response.url
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to upload image')
     return null
   } finally {
@@ -266,24 +257,22 @@ async function saveService() {
     }
 
     if (isEditing.value && editingId.value) {
-      await $fetch(`/api/admin/services/${editingId.value}`, {
+      await authFetch(`/api/admin/services/${editingId.value}`, {
         method: 'PATCH',
         body: payload,
-        headers: { Authorization: `Bearer ${await getAuthToken()}` },
       })
       toast.success('Service updated successfully')
     } else {
-      await $fetch('/api/admin/services', {
+      await authFetch('/api/admin/services', {
         method: 'POST',
         body: payload,
-        headers: { Authorization: `Bearer ${await getAuthToken()}` },
       })
       toast.success('Service created successfully')
     }
 
     isPanelOpen.value = false
     await fetchServices()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to save service')
   } finally {
     isSaving.value = false
@@ -293,14 +282,13 @@ async function saveService() {
 // ─── Toggle Active ───────────────────────────────
 async function toggleActive(service: Service) {
   try {
-    await $fetch(`/api/admin/services/${service.id}`, {
+    await authFetch(`/api/admin/services/${service.id}`, {
       method: 'PATCH',
       body: { is_active: !service.is_active },
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     await fetchServices()
     toast.success(service.is_active ? 'Service deactivated' : 'Service activated')
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to toggle status')
   }
 }
@@ -316,13 +304,12 @@ async function deleteService(service: Service) {
   if (!ok) return
 
   try {
-    await $fetch(`/api/admin/services/${service.id}`, {
+    await authFetch(`/api/admin/services/${service.id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Service deleted')
     await fetchServices()
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to delete service')
   }
 }
@@ -345,9 +332,7 @@ function formatDuration(mins: number): string {
   return m ? `${h}h ${m}m` : `${h}h`
 }
 
-function formatPrice(price: number): string {
-  return `₱${price.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`
-}
+const { formatPrice } = useFormat()
 
 // ─── Init ────────────────────────────────────────
 onMounted(async () => {

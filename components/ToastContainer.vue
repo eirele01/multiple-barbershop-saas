@@ -1,3 +1,7 @@
+<script setup lang="ts">
+const { toasts, remove } = useToast()
+</script>
+
 <template>
   <!-- Toast Container — Renders all active toasts -->
   <Teleport to="body">
@@ -48,7 +52,3 @@
     </div>
   </Teleport>
 </template>
-
-<script setup lang="ts">
-const { toasts, remove } = useToast()
-</script>

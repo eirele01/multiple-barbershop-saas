@@ -19,20 +19,27 @@
  * Returns: { paid: boolean, status: string }
  */
 import { createClient } from '@supabase/supabase-js'
+import { z } from 'zod'
 import { decrypt } from '~/utils/server/encryption'
+import { paymongoVerifyRateLimiter } from '~/utils/server/rateLimiter'
+
+const verifyPaymentSchema = z.object({
+  bookingId: z.string().uuid(),
+})
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
 
-  let body: { bookingId?: string } = {}
-  try {
-    body = await readBody(event) || {}
-  } catch {
-    body = {}
-  }
+  // Rate limiting: 10 requests per minute per IP
+  await paymongoVerifyRateLimiter.check(event)
 
-  if (!body.bookingId) {
-    throw createError({ statusCode: 400, statusMessage: 'Missing bookingId' })
+  const body = await readBody(event)
+  const parsed = verifyPaymentSchema.safeParse(body)
+  if (!parsed.success) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Validation failed: bookingId must be a valid UUID',
+    })
   }
 
   const supabase = createClient(
@@ -43,12 +50,27 @@ export default defineEventHandler(async (event) => {
   // Fetch the booking
   const { data: booking, error: bookingError } = await supabase
     .from('bookings')
-    .select('id, booking_ref, shop_id, paymongo_payment_id, payment_status, status, payment_type')
-    .eq('id', body.bookingId)
+    .select('id, booking_ref, shop_id, paymongo_payment_id, payment_status, status, payment_type, customer_id')
+    .eq('id', parsed.data.bookingId)
     .single()
 
   if (bookingError || !booking) {
     throw createError({ statusCode: 404, statusMessage: 'Booking not found' })
+  }
+
+  // If caller is authenticated, verify ownership
+  const authHeader = getHeader(event, 'authorization')
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : ''
+  if (token) {
+    try {
+      const authUser = await verifyAuth(token)
+      if (authUser && booking.customer_id !== authUser.id) {
+        throw createError({ statusCode: 403, statusMessage: 'Forbidden: You can only check payment status for your own bookings' })
+      }
+    } catch (e: unknown) {
+      // If token is invalid, allow unauthenticated access (rate-limited)
+      // This maintains backward compat for payment-success page polling
+    }
   }
 
   // Already paid?
@@ -81,7 +103,7 @@ export default defineEventHandler(async (event) => {
   let secretKey: string
   try {
     secretKey = decrypt(shop.paymongo_secret_key)
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[verify-paymongo-payment] Decryption error:', e.message)
     throw createError({ statusCode: 500, statusMessage: 'Failed to decrypt PayMongo secret key' })
   }
@@ -187,7 +209,7 @@ export default defineEventHandler(async (event) => {
       // Payment not yet completed
       return { paid: false, status: booking.status, paymongoStatus: attributes.status }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[verify-paymongo-payment] Error:', error.name, error.message)
     if (error.name === 'AbortError') {
       return { paid: false, status: booking.status, message: 'PayMongo API timed out' }

@@ -25,6 +25,7 @@ import {
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
 const authStore = useAuthStore()
+const toast = useToast()
 
 // ─── Reactive data ──────────────────────────────────────
 const isLoading = ref(true)
@@ -44,18 +45,10 @@ const recentShops = ref<any[]>([])
 const recentUpgrades = ref<any[]>([])
 
 // ─── Format helpers ──────────────────────────────────────
-function formatCurrency(value: number): string {
-  return '₱' + value.toLocaleString()
-}
+const { formatPrice, formatDate } = useFormat()
 
-function formatDate(dateStr: string): string {
-  if (!dateStr) return '—'
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+function formatCurrency(value: number): string {
+  return formatPrice(value)
 }
 
 // ─── Fetch dashboard data ────────────────────────────────
@@ -110,7 +103,8 @@ async function fetchDashboardData() {
       }))
     }
   } catch (error) {
-    console.error('Failed to fetch dashboard data:', error)
+    toast.error('Could not load dashboard data. Please try again.')
+    console.error('Failed to fetch dashboard data:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -363,16 +357,7 @@ const doughnutChartData = computed(() => ({
                 </td>
                 <td class="py-3 text-[var(--color-titanium)]">{{ shop.owner_email || '—' }}</td>
                 <td class="py-3">
-                  <span
-                    class="badge-pill text-[10px]"
-                    :class="
-                      shop.plan === 'upgraded'
-                        ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                        : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
-                    "
-                  >
-                    {{ shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-                  </span>
+                  <PlanBadge :plan="shop.plan" />
                 </td>
                 <td class="py-3 text-[var(--color-titanium)]">{{ formatDate(shop.created_at) }}</td>
                 <td class="py-3">
@@ -401,16 +386,7 @@ const doughnutChartData = computed(() => ({
             </div>
             <p class="truncate text-xs text-[var(--color-titanium)]">{{ shop.owner_email || '\u2014' }}</p>
             <div class="mt-1 flex items-center justify-between text-xs text-[var(--color-titanium)]">
-              <span
-                class="badge-pill text-[10px]"
-                :class="
-                  shop.plan === 'upgraded'
-                    ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                    : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
-                "
-              >
-                {{ shop.plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-              </span>
+              <PlanBadge :plan="shop.plan" />
               <span>{{ formatDate(shop.created_at) }}</span>
             </div>
           </div>
@@ -459,28 +435,10 @@ const doughnutChartData = computed(() => ({
               >
                 <td class="py-3 font-medium text-[var(--color-deep)]">{{ upgrade.shop_name }}</td>
                 <td class="py-3">
-                  <span
-                    class="badge-pill text-[10px]"
-                    :class="
-                      upgrade.old_plan === 'upgraded'
-                        ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                        : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
-                    "
-                  >
-                    {{ upgrade.old_plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-                  </span>
+                  <PlanBadge :plan="upgrade.old_plan" />
                 </td>
                 <td class="py-3">
-                  <span
-                    class="badge-pill text-[10px]"
-                    :class="
-                      upgrade.new_plan === 'upgraded'
-                        ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                        : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
-                    "
-                  >
-                    {{ upgrade.new_plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-                  </span>
+                  <PlanBadge :plan="upgrade.new_plan" />
                 </td>
                 <td class="py-3 text-[var(--color-titanium)]">{{ formatDate(upgrade.upgraded_at) }}</td>
               </tr>
@@ -497,27 +455,9 @@ const doughnutChartData = computed(() => ({
           >
             <p class="truncate font-medium text-[var(--color-deep)]">{{ upgrade.shop_name }}</p>
             <div class="mt-1 flex items-center gap-2 text-xs text-[var(--color-titanium)]">
-              <span
-                class="badge-pill text-[10px]"
-                :class="
-                  upgrade.old_plan === 'upgraded'
-                    ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                    : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
-                "
-              >
-                {{ upgrade.old_plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-              </span>
+              <PlanBadge :plan="upgrade.old_plan" />
               <Icon name="lucide:arrow-right" class="h-3 w-3" />
-              <span
-                class="badge-pill text-[10px]"
-                :class="
-                  upgrade.new_plan === 'upgraded'
-                    ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                    : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
-                "
-              >
-                {{ upgrade.new_plan === 'upgraded' ? 'Upgraded' : 'Basic' }}
-              </span>
+              <PlanBadge :plan="upgrade.new_plan" />
               <span class="ml-auto">{{ formatDate(upgrade.upgraded_at) }}</span>
             </div>
           </div>

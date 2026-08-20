@@ -13,8 +13,8 @@ import { z } from 'zod'
 const profileSchema = z.object({
   display_name: z.string().min(1, 'Name is required').max(100).optional(),
   phone_number: z.string().max(20).optional(),
-  old_password: z.string().min(6).optional(),
-  new_password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  old_password: z.string().min(1, 'Current password is required').optional(),
+  new_password: z.string().min(8, 'Password must be at least 8 characters').optional(),
 }).refine(
   (data) => {
     // If either password field is provided, both must be provided
@@ -41,15 +41,12 @@ export default defineEventHandler(async (event) => {
 
   // Auth check
   const authHeader = getHeader(event, 'authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : ''
+  const authUser = await verifyAuth(token)
 
-  const token = authHeader.substring(7)
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-  if (authError || !user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid token' })
+  // Customer-only access
+  if (authUser.role !== 'customer') {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden: Customer access required' })
   }
 
   // Validate body
@@ -79,7 +76,7 @@ export default defineEventHandler(async (event) => {
     const { error: profileError } = await supabase
       .from('users')
       .update(profileUpdates)
-      .eq('id', user.id)
+      .eq('id', authUser.id)
 
     if (profileError) {
       console.error('Error updating customer profile:', profileError)
@@ -91,7 +88,7 @@ export default defineEventHandler(async (event) => {
   if (old_password && new_password) {
     // Verify old password by attempting sign-in
     const { error: verifyError } = await supabaseUser.auth.signInWithPassword({
-      email: user.email!,
+      email: authUser.email!,
       password: old_password,
     })
 
@@ -114,7 +111,7 @@ export default defineEventHandler(async (event) => {
   const { data: updatedProfile } = await supabase
     .from('users')
     .select('id, email, display_name, phone_number, photo_url')
-    .eq('id', user.id)
+    .eq('id', authUser.id)
     .single()
 
   return {

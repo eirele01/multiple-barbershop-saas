@@ -71,7 +71,7 @@ async function fetchReports() {
     topBarbers.value = result.topBarbers || []
     transactions.value = result.transactions || []
     txPage.value = 1
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load reports')
   } finally {
@@ -80,24 +80,7 @@ async function fetchReports() {
 }
 
 // ─── Helpers ───────────────────────────────────────
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-function formatDateShort(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
+const { formatPrice, formatDate } = useFormat()
 
 // ─── Chart helpers ─────────────────────────────────
 const maxRevenue = computed(() => {
@@ -427,7 +410,7 @@ onMounted(() => {
                   :key="tx.id"
                   class="border-b border-[var(--color-silver)]/10 transition-colors hover:bg-[var(--color-silver)]/5"
                 >
-                  <td class="px-4 py-3 text-[var(--color-deep)]">{{ formatDateShort(tx.date) }}</td>
+                  <td class="px-4 py-3 text-[var(--color-deep)]">{{ formatDate(tx.date) }}</td>
                   <td class="px-4 py-3 font-mono text-xs font-bold text-[var(--color-deep)]">{{ tx.booking_ref }}</td>
                   <td class="px-4 py-3 text-[var(--color-deep)]">{{ tx.customer_name }}</td>
                   <td class="px-4 py-3 text-[var(--color-deep)]">{{ tx.service_name }}</td>

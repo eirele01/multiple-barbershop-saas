@@ -63,15 +63,8 @@ async function fetchLoyaltyData() {
   isLoading.value = true
   hasError.value = false
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    const response = await $fetch('/api/customer/loyalty/status', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
+    const { authFetch } = useAuthFetch()
+    const response = await authFetch('/api/customer/loyalty/status') as any
 
     shopLoyaltyList.value = response.shops || []
 
@@ -80,10 +73,9 @@ async function fetchLoyaltyData() {
       selectedShopId.value = shopLoyaltyList.value[0].shopId
       await fetchTransactions()
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load loyalty data')
-    console.error('Error fetching loyalty data:', error)
   } finally {
     isLoading.value = false
   }
@@ -94,14 +86,8 @@ async function fetchTransactions() {
   if (!selectedShopId.value) return
   txLoading.value = true
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    const response = await $fetch('/api/customer/loyalty/transactions', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+    const { authFetch } = useAuthFetch()
+    const response = await authFetch('/api/customer/loyalty/transactions', {
       params: {
         shopId: selectedShopId.value,
         page: txPage.value,
@@ -111,9 +97,8 @@ async function fetchTransactions() {
 
     transactions.value = response.transactions || []
     txTotal.value = response.total || 0
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load transactions')
-    console.error('Error fetching transactions:', error)
   } finally {
     txLoading.value = false
   }
@@ -127,13 +112,7 @@ async function selectShop(shopId: string) {
 }
 
 // ─── Format Helpers ────────────────────────────────
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-PH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
+const { formatDate } = useFormat()
 
 function formatTxType(type: string): string {
   const labels: Record<string, string> = {
@@ -212,6 +191,8 @@ onMounted(() => {
       icon="lucide:star"
       title="No Loyalty Points Yet"
       message="Book an appointment at a participating barbershop to start earning points!"
+      action-label="Book Now"
+      :action-fn="() => navigateTo('/')"
     />
 
     <!-- Has loyalty data -->
@@ -292,7 +273,7 @@ onMounted(() => {
               Need {{ reward.points_required - activeShop.balance }} more points
             </p>
             <p v-else class="mt-2 text-xs font-medium text-[var(--color-success)]">
-              You can redeem this!
+              Available during booking
             </p>
           </div>
         </div>

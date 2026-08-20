@@ -216,7 +216,7 @@ async function fetchCalendarBookings() {
     for (const b of bookings.value) {
       getBarberColor(b.barber_id)
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     hasError.value = true
     toast.error('Failed to load calendar bookings')
   } finally {
@@ -272,15 +272,7 @@ function isToday(dateStr: string): boolean {
   return dateStr === formatDateStr(new Date())
 }
 
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
+const { formatPrice, formatTime } = useFormat()
 
 function openBookingDetail(booking: any) {
   selectedBooking.value = booking

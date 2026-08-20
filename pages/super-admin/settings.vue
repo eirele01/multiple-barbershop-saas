@@ -16,6 +16,7 @@ definePageMeta({
 })
 
 const toast = useToast()
+const { authFetch } = useAuthFetch()
 
 // ─── State ─────────────────────────────────────────
 const isLoading = ref(true)
@@ -34,23 +35,11 @@ const isSaving = ref({
   maintenance: false,
 })
 
-// ─── Get Auth Token ────────────────────────────────
-async function getAuthToken(): Promise<string | null> {
-  const supabase = useSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token || null
-}
-
 // ─── Fetch Settings ────────────────────────────────
 async function fetchSettings() {
   isLoading.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch('/api/super-admin/settings', {
-      headers: { Authorization: `Bearer ${token}` },
-    }) as any
+    const data = await authFetch('/api/super-admin/settings') as any
 
     if (data) {
       const s = data.settings || data
@@ -62,9 +51,9 @@ async function fetchSettings() {
       settings.value.maintenance_mode = s.maintenance_mode || 'false'
       settings.value.maintenance_message = s.maintenance_message || ''
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load settings')
-    console.error('Error fetching settings:', error)
+    console.error('Error fetching settings:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -74,12 +63,8 @@ async function fetchSettings() {
 async function savePlatformInfo() {
   isSaving.value.platform = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch('/api/super-admin/settings', {
+    await authFetch('/api/super-admin/settings', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: {
         platform_name: settings.value.platform_name,
         platform_url: settings.value.platform_url,
@@ -88,7 +73,7 @@ async function savePlatformInfo() {
     })
 
     toast.success('Platform info saved successfully')
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to save platform info'
     toast.error(msg)
   } finally {
@@ -100,12 +85,8 @@ async function savePlatformInfo() {
 async function savePricingConfig() {
   isSaving.value.pricing = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch('/api/super-admin/settings', {
+    await authFetch('/api/super-admin/settings', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: {
         upgraded_monthly_price: settings.value.upgraded_monthly_price,
         upgraded_yearly_price: settings.value.upgraded_yearly_price,
@@ -113,7 +94,7 @@ async function savePricingConfig() {
     })
 
     toast.success('Pricing config saved successfully')
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to save pricing config'
     toast.error(msg)
   } finally {
@@ -125,12 +106,8 @@ async function savePricingConfig() {
 async function saveMaintenanceMode() {
   isSaving.value.maintenance = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    await $fetch('/api/super-admin/settings', {
+    await authFetch('/api/super-admin/settings', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: {
         maintenance_mode: settings.value.maintenance_mode,
         maintenance_message: settings.value.maintenance_message,
@@ -138,7 +115,7 @@ async function saveMaintenanceMode() {
     })
 
     toast.success('Maintenance settings saved successfully')
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to save maintenance settings'
     toast.error(msg)
   } finally {
@@ -305,6 +282,9 @@ onMounted(() => {
                 {{ settings.maintenance_mode === 'true' ? 'ON' : 'OFF' }}
               </span>
               <button
+                role="switch"
+                :aria-checked="settings.maintenance_mode === 'true'"
+                :aria-label="settings.maintenance_mode === 'true' ? 'Maintenance mode enabled' : 'Maintenance mode disabled'"
                 class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
                 :class="settings.maintenance_mode === 'true' ? 'bg-[var(--color-danger)]' : 'bg-[var(--color-success)]'"
                 @click="toggleMaintenanceMode"

@@ -12,6 +12,7 @@ definePageMeta({
 const authStore = useAuthStore()
 const shopStore = useShopStore()
 const route = useRoute()
+const toast = useToast()
 
 // Onboarding state
 const showOnboardingBanner = ref(false)
@@ -71,7 +72,8 @@ async function fetchDashboardData() {
       .eq('is_active', true)
     activeStaff.value = staffCount || 0
   } catch (error) {
-    console.error('Error fetching dashboard data:', error)
+    toast.error('Could not load dashboard stats. Please refresh the page.')
+    console.error('Error fetching dashboard data:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -172,16 +174,7 @@ const displayOnboarding = computed(() => showOnboardingBanner.value && !isOnboar
       </p>
       <!-- Plan badge -->
       <div class="mt-2 flex items-center gap-2">
-        <span
-          class="badge-pill text-[10px]"
-          :class="
-            shopStore.isUpgradedPlan
-              ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-              : 'bg-[var(--color-silver)]/30 text-[var(--color-titanium)]'
-          "
-        >
-          {{ shopStore.isUpgradedPlan ? 'Upgraded Plan' : 'Basic Plan' }}
-        </span>
+        <PlanBadge :plan="shopStore.isUpgradedPlan ? 'upgraded' : 'basic'" />
         <NuxtLink
           v-if="shopStore.isBasicPlan"
           to="/admin/settings"

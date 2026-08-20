@@ -1,7 +1,30 @@
 node_modules
 .nuxt
-.env
 .output
 dist
 *.log
 .DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Supabase
+supabase/.temp
+supabase/storage
+
+# IDE
+.vscode
+.idea
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Build artifacts
+*.tsbuildinfo
+
+#AI Agent
+.qwen

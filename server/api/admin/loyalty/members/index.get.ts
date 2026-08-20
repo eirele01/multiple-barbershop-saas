@@ -98,7 +98,8 @@ export default defineEventHandler(async (event) => {
       .in('id', customerIds)
 
     if (search) {
-      queryBuilder = queryBuilder.or(`display_name.ilike.%${search}%,email.ilike.%${search}%`)
+      const safe = search.replace(/[%_]/g, (c) => `\\${c}`)
+      queryBuilder = queryBuilder.or(`display_name.ilike.%${safe}%,email.ilike.%${safe}%`)
     }
 
     const { data: customerData } = await queryBuilder

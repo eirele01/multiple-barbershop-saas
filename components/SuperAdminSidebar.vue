@@ -117,70 +117,48 @@ watch(isCollapsed, (val) => {
 </script>
 
 <template>
-  <!-- Mobile overlay -->
-  <Transition
-    enter-active-class="transition-opacity duration-200"
-    enter-from-class="opacity-0"
-    enter-to-class="opacity-100"
-    leave-active-class="transition-opacity duration-200"
-    leave-from-class="opacity-100"
-    leave-to-class="opacity-0"
+  <BaseSidebar
+    :collapsed="isCollapsed"
+    :mobile-open="isMobileOpen"
+    :display-name="authStore.displayName"
+    role-label="Super Admin"
+    role-label-class="text-[var(--color-info)]"
+    @toggle-collapse="toggleCollapse"
+    @toggle-mobile="toggleMobile"
+    @link-click="isMobileOpen = false"
+    @sign-out="authStore.signOut()"
   >
-    <div
-      v-if="isMobileOpen"
-      class="fixed inset-0 z-40 bg-black/50 lg:hidden"
-      @click="toggleMobile"
-    />
-  </Transition>
-
-  <!-- Mobile hamburger trigger -->
-  <button
-    class="fixed bottom-4 left-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-deep)] text-white shadow-lg lg:hidden"
-    @click="toggleMobile"
-  >
-    <Icon name="lucide:menu" class="h-6 w-6" />
-  </button>
-
-  <!-- Sidebar -->
-  <aside
-    class="fixed left-0 top-0 z-50 flex h-full flex-col border-r border-[var(--color-silver)]/30 bg-[var(--color-pure-white)] transition-all duration-300 ease-in-out lg:relative lg:z-auto"
-    :class="[
-      isCollapsed ? 'w-[72px]' : 'w-64',
-      isMobileOpen
-        ? 'translate-x-0'
-        : '-translate-x-full lg:translate-x-0',
-    ]"
-  >
-    <!-- Header: Platform info -->
-    <div class="flex items-center border-b border-[var(--color-silver)]/30 px-4 py-4" :class="isCollapsed ? 'justify-center' : 'gap-3'">
-      <div
-        class="gradient-metallic flex h-10 w-10 shrink-0 items-center justify-center rounded-btn"
-      >
-        <Icon name="lucide:shield" class="h-5 w-5 text-white" />
-      </div>
-      <div v-if="!isCollapsed" class="min-w-0 flex-1">
-        <p class="truncate text-sm font-semibold text-[var(--color-deep)]">
-          Super Admin
-        </p>
-        <div class="mt-1 flex items-center gap-1.5">
-          <span class="relative flex h-2 w-2">
-            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
-            <span class="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
-          </span>
-          <span class="text-[10px] font-medium text-[var(--color-success)]">Platform Online</span>
+    <template #header="{ collapsed }">
+      <!-- Header: Platform info -->
+      <div class="flex items-center border-b border-[var(--color-silver)]/30 px-4 py-4" :class="collapsed ? 'justify-center' : 'gap-3'">
+        <div
+          class="gradient-metallic flex h-10 w-10 shrink-0 items-center justify-center rounded-btn"
+        >
+          <Icon name="lucide:shield" class="h-5 w-5 text-white" />
+        </div>
+        <div v-if="!collapsed" class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold text-[var(--color-deep)]">
+            Super Admin
+          </p>
+          <div class="mt-1 flex items-center gap-1.5">
+            <span class="relative flex h-2 w-2">
+              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+              <span class="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
+            </span>
+            <span class="text-[10px] font-medium text-[var(--color-success)]">Platform Online</span>
+          </div>
         </div>
       </div>
-    </div>
+    </template>
 
-    <!-- Navigation Items -->
-    <nav class="flex-1 overflow-y-auto px-3 py-4">
+    <template #nav="{ collapsed }">
       <template v-for="(group, groupIdx) in navGroups" :key="group.label">
         <!-- Group divider (except first) -->
-        <div v-if="groupIdx > 0" class="my-3" :class="isCollapsed ? 'mx-auto w-8 border-t border-[var(--color-silver)]/40' : 'border-t border-[var(--color-silver)]/40'" />
+        <div v-if="groupIdx > 0" class="my-3" :class="collapsed ? 'mx-auto w-8 border-t border-[var(--color-silver)]/40' : 'border-t border-[var(--color-silver)]/40'" />
 
         <!-- Group label -->
         <p
-          v-if="!isCollapsed"
+          v-if="!collapsed"
           class="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-titanium)]"
         >
           {{ group.label }}
@@ -196,16 +174,16 @@ watch(isCollapsed, (val) => {
                 isActive(item.to)
                   ? 'bg-[var(--color-deep)]/8 text-[var(--color-deep)]'
                   : 'text-[var(--color-titanium)] hover:bg-[var(--color-silver)]/15 hover:text-[var(--color-deep)]',
-                isCollapsed ? 'justify-center' : '',
+                collapsed ? 'justify-center' : '',
               ]"
-              :title="isCollapsed ? item.label : ''"
+              :title="collapsed ? item.label : ''"
               @click="isMobileOpen = false"
             >
               <!-- Active left accent bar -->
               <span
                 v-if="isActive(item.to)"
                 class="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--color-deep)]"
-                :class="isCollapsed ? 'left-[-3px]' : ''"
+                :class="collapsed ? 'left-[-3px]' : ''"
               />
 
               <Icon
@@ -213,57 +191,11 @@ watch(isCollapsed, (val) => {
                 class="h-5 w-5 shrink-0 transition-colors duration-200"
                 :class="isActive(item.to) ? 'text-[var(--color-deep)]' : 'text-[var(--color-titanium)] group-hover:text-[var(--color-deep)]'"
               />
-              <span v-if="!isCollapsed">{{ item.label }}</span>
+              <span v-if="!collapsed">{{ item.label }}</span>
             </NuxtLink>
           </li>
         </ul>
       </template>
-    </nav>
-
-    <!-- Footer: User info + collapse toggle -->
-    <div class="border-t border-[var(--color-silver)]/30 p-3">
-      <!-- User info -->
-      <div
-        class="flex items-center gap-3 rounded-input px-3 py-2"
-        :class="isCollapsed ? 'justify-center' : ''"
-      >
-        <div
-          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-deep)] text-xs font-bold text-white ring-2 ring-[var(--color-silver)]/30"
-        >
-          {{ authStore.displayName?.charAt(0)?.toUpperCase() || 'S' }}
-        </div>
-        <div v-if="!isCollapsed" class="min-w-0 flex-1">
-          <p class="truncate text-xs font-medium text-[var(--color-deep)]">
-            {{ authStore.displayName }}
-          </p>
-          <p class="truncate text-[10px] text-[var(--color-info)]">
-            Super Admin
-          </p>
-        </div>
-      </div>
-
-      <!-- Collapse toggle (desktop only) -->
-      <button
-        class="mt-2 hidden w-full items-center gap-2 rounded-input px-3 py-2 text-[var(--color-titanium)] transition-colors hover:bg-[var(--color-silver)]/15 hover:text-[var(--color-deep)] lg:flex"
-        :class="isCollapsed ? 'justify-center' : ''"
-        @click="toggleCollapse"
-      >
-        <Icon
-          :name="isCollapsed ? 'lucide:panel-left-open' : 'lucide:panel-left-close'"
-          class="h-4 w-4"
-        />
-        <span v-if="!isCollapsed" class="text-xs">Collapse</span>
-      </button>
-
-      <!-- Sign out -->
-      <button
-        class="mt-1 flex w-full items-center gap-3 rounded-input px-3 py-2 text-sm font-medium text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger)]/8"
-        :class="isCollapsed ? 'justify-center' : ''"
-        @click="authStore.signOut()"
-      >
-        <Icon name="lucide:log-out" class="h-4 w-4 shrink-0" />
-        <span v-if="!isCollapsed">Sign Out</span>
-      </button>
-    </div>
-  </aside>
+    </template>
+  </BaseSidebar>
 </template>

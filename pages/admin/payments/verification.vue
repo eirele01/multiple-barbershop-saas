@@ -16,6 +16,7 @@
 
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
+import { useAuthFetch } from '~/composables/useAuthFetch'
 import type { VerificationStatus } from '~/types/database'
 
 definePageMeta({
@@ -28,6 +29,7 @@ definePageMeta({
 
 const authStore = useAuthStore()
 const shopStore = useShopStore()
+const { authFetch } = useAuthFetch()
 
 // ─── Role check ──────────────────────────────────────
 const canVerify = computed(() => {
@@ -132,26 +134,6 @@ const toast = useToast()
 let realtimeChannel: any = null
 
 // ─── Fetch verifications ─────────────────────────────
-async function getAuthToken(): Promise<string> {
-  const supabase = useSupabase()
-  
-  // Try current session first
-  const { data } = await supabase.auth.getSession()
-  if (data.session?.access_token) {
-    return data.session.access_token
-  }
-  
-  // Session expired — try to refresh
-  const { data: refreshed } = await supabase.auth.refreshSession()
-  if (refreshed.session?.access_token) {
-    return refreshed.session.access_token
-  }
-  
-  // No session at all — redirect to login
-  navigateTo('/login')
-  return ''
-}
-
 async function fetchVerifications(page = 1) {
   isLoading.value = true
   try {
@@ -163,16 +145,14 @@ async function fetchVerifications(page = 1) {
     params.set('page', page.toString())
     params.set('limit', limit.toString())
 
-    const response = await $fetch<any>(`/api/admin/payment-verifications?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
-    })
+    const response = await authFetch<any>(`/api/admin/payment-verifications?${params.toString()}`)
 
     verifications.value = response.data || []
     counts.value = response.counts || { pending: 0, verified: 0, rejected: 0, more_info: 0 }
     currentPage.value = response.pagination?.page || 1
     totalPages.value = response.pagination?.totalPages || 1
     totalItems.value = response.pagination?.total || 0
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error('Failed to load verifications')
   } finally {
     isLoading.value = false
@@ -182,9 +162,7 @@ async function fetchVerifications(page = 1) {
 // Fetch payment method options for filter dropdown
 async function fetchPaymentMethodOptions() {
   try {
-    const response = await $fetch<any>('/api/admin/payment-methods', {
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
-    })
+    const response = await authFetch<any>('/api/admin/payment-methods')
     paymentMethodOptions.value = (response.data || []).map((m: any) => ({ id: m.id, name: m.name }))
   } catch { /* ignore */ }
 }
@@ -264,9 +242,8 @@ function cancelVerify() {
 async function confirmVerify(id: string) {
   isActioning.value = true
   try {
-    await $fetch(`/api/admin/payment-verifications/${id}/verify`, {
+    await authFetch(`/api/admin/payment-verifications/${id}/verify`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Payment verified successfully')
     // Animate out by removing from list
@@ -274,7 +251,7 @@ async function confirmVerify(id: string) {
     counts.value.pending = Math.max(0, counts.value.pending - 1)
     counts.value.verified += 1
     verifyConfirmId.value = null
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to verify payment')
   } finally {
     isActioning.value = false
@@ -301,10 +278,9 @@ async function confirmReject(id: string) {
   }
   isActioning.value = true
   try {
-    await $fetch(`/api/admin/payment-verifications/${id}/reject`, {
+    await authFetch(`/api/admin/payment-verifications/${id}/reject`, {
       method: 'PATCH',
       body: { rejection_reason: rejectReason.value },
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Payment rejected')
     verifications.value = verifications.value.filter((v) => v.id !== id)
@@ -312,7 +288,7 @@ async function confirmReject(id: string) {
     counts.value.rejected += 1
     rejectFormId.value = null
     rejectReason.value = ''
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to reject payment')
   } finally {
     isActioning.value = false
@@ -339,10 +315,9 @@ async function confirmInfo(id: string) {
   }
   isActioning.value = true
   try {
-    await $fetch(`/api/admin/payment-verifications/${id}/request-info`, {
+    await authFetch(`/api/admin/payment-verifications/${id}/request-info`, {
       method: 'PATCH',
       body: { info_request_msg: infoMessage.value },
-      headers: { Authorization: `Bearer ${await getAuthToken()}` },
     })
     toast.success('Info request sent to customer')
     // Move to More Info tab
@@ -351,7 +326,7 @@ async function confirmInfo(id: string) {
     counts.value.more_info += 1
     infoFormId.value = null
     infoMessage.value = ''
-  } catch (e: any) {
+  } catch (e: unknown) {
     toast.error(e.data?.statusMessage || 'Failed to request info')
   } finally {
     isActioning.value = false
@@ -466,6 +441,17 @@ onMounted(() => {
 function formatCurrency(amount: number): string {
   return `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`
 }
+
+// ─── Keyboard navigation for tabs ────────────────────
+const tabKeysVerification = ['pending', 'verified', 'rejected', 'more_info'] as const
+function handleTabKeyVerification(e: KeyboardEvent) {
+  const idx = tabKeysVerification.indexOf(activeTab.value as any)
+  if (idx === -1) return
+  if (e.key === 'ArrowRight') activeTab.value = tabKeysVerification[(idx + 1) % tabKeysVerification.length] as any
+  if (e.key === 'ArrowLeft') activeTab.value = tabKeysVerification[(idx - 1 + tabKeysVerification.length) % tabKeysVerification.length] as any
+  if (e.key === 'Home') activeTab.value = tabKeysVerification[0] as any
+  if (e.key === 'End') activeTab.value = tabKeysVerification[tabKeysVerification.length - 1] as any
+}
 </script>
 
 <template>
@@ -544,7 +530,7 @@ function formatCurrency(amount: number): string {
     </Transition>
 
     <!-- Tabs -->
-    <div class="mb-6 flex gap-1 overflow-x-auto border-b border-[var(--color-silver)]/30">
+    <div role="tablist" class="mb-6 flex gap-1 overflow-x-auto border-b border-[var(--color-silver)]/30" @keydown.prevent="handleTabKeyVerification">
       <button
         v-for="tab in ([
           { key: 'pending', label: 'Pending', count: counts.pending },
@@ -553,6 +539,8 @@ function formatCurrency(amount: number): string {
           { key: 'more_info', label: 'More Info', count: counts.more_info },
         ] as const)"
         :key="tab.key"
+        role="tab"
+        :aria-selected="activeTab === tab.key"
         class="relative whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors"
         :class="activeTab === tab.key
           ? 'text-[var(--color-deep)] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--color-deep)]'

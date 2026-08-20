@@ -12,6 +12,9 @@
  *   limit      — items per page (default 20)
  *
  * Accessible by: admin, manager, cashier
+ *
+ * NOTE: Payment verification records are synced via POST /api/admin/payment-verifications/sync.
+ * This endpoint is read-only.
  */
 import { createClient } from '@supabase/supabase-js'
 

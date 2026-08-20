@@ -65,9 +65,10 @@ export default defineEventHandler(async (event) => {
       shopsQuery = shopsQuery.lte('created_at', dateTo + 'T23:59:59.999Z')
     }
 
-    // Apply search (on name and slug)
+    // Apply search (on name and slug) — escape %, _ to prevent SQL injection
     if (search) {
-      shopsQuery = shopsQuery.or(`name.ilike.%${search}%,slug.ilike.%${search}%`)
+      const safe = search.replace(/[%_]/g, (c) => `\\${c}`)
+      shopsQuery = shopsQuery.or(`name.ilike.%${safe}%,slug.ilike.%${safe}%`)
     }
 
     // ── Pagination ──

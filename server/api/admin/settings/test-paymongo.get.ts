@@ -94,7 +94,7 @@ export default defineEventHandler(async (event) => {
       console.error('PayMongo test connection failed:', response.status, errorData)
       return { valid: false, error: errorMessage }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PayMongo test connection error:', error)
     return { valid: false, error: 'Connection failed — please check your internet connection and try again.' }
   }

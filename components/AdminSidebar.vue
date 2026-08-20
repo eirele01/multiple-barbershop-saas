@@ -17,6 +17,7 @@
 
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
+import { SHOP_STAFF_ROLES } from '~/constants/roles'
 
 const authStore = useAuthStore()
 const shopStore = useShopStore()
@@ -32,71 +33,43 @@ const isLoyaltyExpanded = ref(false)
 
 // ─── Live pending verification count ─────────────────
 const pendingCount = ref(0)
-let realtimeChannel: any = null
+
+// async function fetchPendingCount() {
+//   try {
+//     const res = await $fetch('/api/admin/payment-verifications/count') as { count: number }
+//     pendingCount.value = res.count
+//   } catch {
+//     // Silently ignore — badge just won't show
+//   }
+// }
 
 async function fetchPendingCount() {
-  const supabase = useSupabase()
-  const shopId = authStore.shopId
-  if (!shopId) return
-
-  const { count, error } = await supabase
-    .from('payment_verifications')
-    .select('id', { count: 'exact', head: true })
-    .eq('shop_id', shopId)
-    .eq('status', 'pending')
-
-  if (!error && count !== null) {
-    pendingCount.value = count
-  }
-}
-
-function setupRealtimeSubscription() {
-  const supabase = useSupabase()
-  const shopId = authStore.shopId
-  if (!shopId) return
-
-  // Unique channel name per shop to avoid "already subscribed" errors
-  const channelName = `payment-verifications-sidebar-${shopId}`
-
-  // Pre-cleanup: remove any existing channel with this name
-  // (handles remount after navigation)
-  const existing = supabase.getChannels().find(
-    (c) => c.topic === `realtime:${channelName}`
-  )
-  if (existing) {
-    supabase.removeChannel(existing)
-  }
-
-  realtimeChannel = supabase
-    .channel(channelName)
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'payment_verifications',
-        filter: `shop_id=eq.${shopId}`,
-      },
-      () => {
-        // Re-fetch count on any change
-        fetchPendingCount()
-      }
-    )
-    .subscribe()
-}
-
-function teardownRealtime() {
-  if (realtimeChannel) {
+  try {
     const supabase = useSupabase()
-    supabase.removeChannel(realtimeChannel)
-    realtimeChannel = null
+    const { data: { session } } = await supabase.auth.getSession()
+
+    if (!session?.access_token) return // not logged in yet, skip silently
+
+    const res = await $fetch('/api/admin/payment-verifications/count', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }) as { count: number }
+    pendingCount.value = res.count
+  } catch (err) {
+    console.error('[AdminSidebar] Failed to fetch pending count:', err)
   }
 }
+
+const { setup: setupRealtime, teardown: teardownRealtime } = useRealtimeSubscription(
+  () => authStore.shopId,
+  { table: 'payment_verifications', event: '*' },
+  () => fetchPendingCount()
+)
 
 onMounted(() => {
   if (authStore.isShopStaff) {
     fetchPendingCount()
-    setupRealtimeSubscription()
   }
 
   // Persist collapsed state
@@ -115,7 +88,7 @@ watch(() => authStore.shopId, (newShopId) => {
   teardownRealtime()
   if (newShopId) {
     fetchPendingCount()
-    setupRealtimeSubscription()
+    setupRealtime()
   } else {
     pendingCount.value = 0
   }
@@ -138,13 +111,13 @@ const navGroups = computed(() => {
           label: 'Dashboard',
           icon: 'lucide:layout-dashboard',
           to: '/admin/dashboard',
-          roles: ['admin', 'manager', 'cashier', 'barber'],
+          roles: SHOP_STAFF_ROLES,
         },
         {
           label: 'Calendar',
           icon: 'lucide:calendar',
           to: '/admin/calendar',
-          roles: ['admin', 'manager', 'cashier', 'barber'],
+          roles: SHOP_STAFF_ROLES,
         },
       ],
     },
@@ -155,7 +128,7 @@ const navGroups = computed(() => {
           label: 'Bookings',
           icon: 'lucide:calendar-check',
           to: '/admin/bookings',
-          roles: ['admin', 'manager', 'cashier', 'barber'],
+          roles: SHOP_STAFF_ROLES,
         },
         {
           label: 'Payments',
@@ -326,79 +299,48 @@ function childBadge(child: any): number {
 </script>
 
 <template>
-  <!-- Mobile overlay -->
-  <Transition
-    enter-active-class="transition-opacity duration-200"
-    enter-from-class="opacity-0"
-    enter-to-class="opacity-100"
-    leave-active-class="transition-opacity duration-200"
-    leave-from-class="opacity-100"
-    leave-to-class="opacity-0"
+  <BaseSidebar
+    :collapsed="isCollapsed"
+    :mobile-open="isMobileOpen"
+    :display-name="authStore.displayName"
+    :role-label="authStore.role || ''"
+    :role-label-class="'text-[var(--color-titanium)]'"
+    @toggle-collapse="toggleCollapse"
+    @toggle-mobile="toggleMobile"
+    @link-click="isMobileOpen = false"
+    @sign-out="authStore.signOut()"
   >
-    <div
-      v-if="isMobileOpen"
-      class="fixed inset-0 z-40 bg-black/50 lg:hidden"
-      @click="toggleMobile"
-    />
-  </Transition>
-
-  <!-- Mobile hamburger trigger -->
-  <button
-    class="fixed bottom-4 left-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-deep)] text-white shadow-lg lg:hidden"
-    @click="toggleMobile"
-  >
-    <Icon name="lucide:menu" class="h-6 w-6" />
-  </button>
-
-  <!-- Sidebar -->
-  <aside
-    class="fixed left-0 top-0 z-50 flex h-full flex-col border-r border-[var(--color-silver)]/30 bg-[var(--color-pure-white)] transition-all duration-300 ease-in-out lg:relative lg:z-auto"
-    :class="[
-      isCollapsed ? 'w-[72px]' : 'w-64',
-      isMobileOpen
-        ? 'translate-x-0'
-        : '-translate-x-full lg:translate-x-0',
-    ]"
-  >
-    <!-- Header: Shop info -->
-    <div class="flex items-center border-b border-[var(--color-silver)]/30 px-4 py-4" :class="isCollapsed ? 'justify-center' : 'gap-3'">
-      <div
-        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-[var(--color-deep)] text-white"
-      >
-        <Icon name="lucide:scissors" class="h-5 w-5" />
-      </div>
-      <div v-if="!isCollapsed" class="min-w-0 flex-1">
-        <p class="truncate text-sm font-semibold text-[var(--color-deep)]">
-          {{ shopStore.name || 'My Shop' }}
-        </p>
-        <div class="mt-1 flex items-center gap-2">
-          <span
-            class="badge-pill text-[10px]"
-            :class="
-              shopStore.isUpgradedPlan
-                ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
-                : 'bg-[var(--color-silver)]/30 text-[var(--color-titanium)]'
-            "
-          >
-            {{ shopStore.isUpgradedPlan ? 'Upgraded' : 'Basic' }}
-          </span>
-          <span class="relative flex h-2 w-2">
-            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
-            <span class="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
-          </span>
+    <template #header="{ collapsed }">
+      <!-- Header: Shop info -->
+      <div class="flex items-center border-b border-[var(--color-silver)]/30 px-4 py-4" :class="collapsed ? 'justify-center' : 'gap-3'">
+        <div
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-[var(--color-deep)] text-white"
+        >
+          <Icon name="lucide:scissors" class="h-5 w-5" />
+        </div>
+        <div v-if="!collapsed" class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold text-[var(--color-deep)]">
+            {{ shopStore.name || 'My Shop' }}
+          </p>
+          <div class="mt-1 flex items-center gap-2">
+            <PlanBadge :plan="shopStore.isUpgradedPlan ? 'upgraded' : 'basic'" />
+            <span class="relative flex h-2 w-2">
+              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
+              <span class="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </template>
 
-    <!-- Navigation Items -->
-    <nav class="flex-1 overflow-y-auto px-3 py-4">
+    <template #nav="{ collapsed }">
       <template v-for="(group, groupIdx) in navGroups" :key="group.label">
         <!-- Group divider (except first) -->
-        <div v-if="groupIdx > 0" class="my-3" :class="isCollapsed ? 'mx-auto w-8 border-t border-[var(--color-silver)]/40' : 'border-t border-[var(--color-silver)]/40'" />
+        <div v-if="groupIdx > 0" class="my-3" :class="collapsed ? 'mx-auto w-8 border-t border-[var(--color-silver)]/40' : 'border-t border-[var(--color-silver)]/40'" />
 
         <!-- Group label -->
         <p
-          v-if="!isCollapsed"
+          v-if="!collapsed"
           class="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-titanium)]"
         >
           {{ group.label }}
@@ -416,16 +358,16 @@ function childBadge(child: any): number {
                 isActive(item.to!)
                   ? 'bg-[var(--color-deep)]/8 text-[var(--color-deep)]'
                   : 'text-[var(--color-titanium)] hover:bg-[var(--color-silver)]/15 hover:text-[var(--color-deep)]',
-                isCollapsed ? 'justify-center' : '',
+                collapsed ? 'justify-center' : '',
               ]"
-              :title="isCollapsed ? item.label : ''"
+              :title="collapsed ? item.label : ''"
               @click="isMobileOpen = false"
             >
               <!-- Active left accent bar -->
               <span
                 v-if="isActive(item.to!)"
                 class="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--color-deep)]"
-                :class="isCollapsed ? 'left-[-3px]' : ''"
+                :class="collapsed ? 'left-[-3px]' : ''"
               />
 
               <Icon
@@ -433,10 +375,10 @@ function childBadge(child: any): number {
                 class="h-5 w-5 shrink-0 transition-colors duration-200"
                 :class="isActive(item.to!) ? 'text-[var(--color-deep)]' : 'text-[var(--color-titanium)] group-hover:text-[var(--color-deep)]'"
               />
-              <span v-if="!isCollapsed">{{ item.label }}</span>
+              <span v-if="!collapsed">{{ item.label }}</span>
               <!-- PRO badge for upgradedOnly items -->
               <span
-                v-if="item.upgradedOnly && !isCollapsed"
+                v-if="item.upgradedOnly && !collapsed"
                 class="badge-pill bg-[var(--color-info)]/10 text-[10px] text-[var(--color-info)]"
               >
                 PRO
@@ -451,7 +393,7 @@ function childBadge(child: any): number {
                   isActiveParent(item)
                     ? 'bg-[var(--color-deep)]/5 text-[var(--color-deep)]'
                     : 'text-[var(--color-titanium)] hover:bg-[var(--color-silver)]/15 hover:text-[var(--color-deep)]',
-                  isCollapsed ? 'justify-center' : '',
+                  collapsed ? 'justify-center' : '',
                 ]"
                 @click="toggleExpand(item)"
               >
@@ -459,7 +401,7 @@ function childBadge(child: any): number {
                 <span
                   v-if="isActiveParent(item)"
                   class="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--color-deep)]"
-                  :class="isCollapsed ? 'left-[-3px]' : ''"
+                  :class="collapsed ? 'left-[-3px]' : ''"
                 />
 
                 <Icon
@@ -467,23 +409,23 @@ function childBadge(child: any): number {
                   class="h-5 w-5 shrink-0 transition-colors duration-200"
                   :class="isActiveParent(item) ? 'text-[var(--color-deep)]' : 'text-[var(--color-titanium)] group-hover:text-[var(--color-deep)]'"
                 />
-                <span v-if="!isCollapsed" class="flex-1 text-left">{{ item.label }}</span>
+                <span v-if="!collapsed" class="flex-1 text-left">{{ item.label }}</span>
                 <!-- PRO badge for upgradedOnly parent items -->
                 <span
-                  v-if="item.upgradedOnly && !isCollapsed"
+                  v-if="item.upgradedOnly && !collapsed"
                   class="badge-pill bg-[var(--color-info)]/10 text-[10px] text-[var(--color-info)]"
                 >
                   PRO
                 </span>
                 <!-- Pending count badge on parent -->
                 <span
-                  v-if="!isCollapsed && pendingCount > 0 && item.label === 'Payments'"
+                  v-if="!collapsed && pendingCount > 0 && item.label === 'Payments'"
                   class="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--color-danger)] px-1.5 text-[10px] font-bold text-white"
                 >
                   {{ pendingCount > 99 ? '99+' : pendingCount }}
                 </span>
                 <Icon
-                  v-if="!isCollapsed"
+                  v-if="!collapsed"
                   name="lucide:chevron-down"
                   class="h-4 w-4 transition-transform"
                   :class="getExpandedState(item) ? 'rotate-180' : ''"
@@ -499,7 +441,7 @@ function childBadge(child: any): number {
                 leave-from-class="max-h-60 opacity-100"
                 leave-to-class="max-h-0 opacity-0"
               >
-                <ul v-if="!isCollapsed && getExpandedState(item)" class="ml-8 mt-1 space-y-1">
+                <ul v-if="!collapsed && getExpandedState(item)" class="ml-8 mt-1 space-y-1">
                   <li v-for="child in item.children" :key="child.label">
                     <NuxtLink
                       v-if="child.roles.includes(role!)"
@@ -529,52 +471,6 @@ function childBadge(child: any): number {
           </li>
         </ul>
       </template>
-    </nav>
-
-    <!-- Footer: User info + collapse toggle -->
-    <div class="border-t border-[var(--color-silver)]/30 p-3">
-      <!-- User info -->
-      <div
-        class="flex items-center gap-3 rounded-input px-3 py-2"
-        :class="isCollapsed ? 'justify-center' : ''"
-      >
-        <div
-          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-deep)] text-xs font-bold text-white ring-2 ring-[var(--color-silver)]/30"
-        >
-          {{ authStore.displayName?.charAt(0)?.toUpperCase() || 'U' }}
-        </div>
-        <div v-if="!isCollapsed" class="min-w-0 flex-1">
-          <p class="truncate text-xs font-medium text-[var(--color-deep)]">
-            {{ authStore.displayName }}
-          </p>
-          <p class="truncate text-[10px] capitalize text-[var(--color-titanium)]">
-            {{ authStore.role }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Collapse toggle (desktop only) -->
-      <button
-        class="mt-2 hidden w-full items-center gap-2 rounded-input px-3 py-2 text-[var(--color-titanium)] transition-colors hover:bg-[var(--color-silver)]/15 hover:text-[var(--color-deep)] lg:flex"
-        :class="isCollapsed ? 'justify-center' : ''"
-        @click="toggleCollapse"
-      >
-        <Icon
-          :name="isCollapsed ? 'lucide:panel-left-open' : 'lucide:panel-left-close'"
-          class="h-4 w-4"
-        />
-        <span v-if="!isCollapsed" class="text-xs">Collapse</span>
-      </button>
-
-      <!-- Sign out -->
-      <button
-        class="mt-1 flex w-full items-center gap-3 rounded-input px-3 py-2 text-sm font-medium text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger)]/8"
-        :class="isCollapsed ? 'justify-center' : ''"
-        @click="authStore.signOut()"
-      >
-        <Icon name="lucide:log-out" class="h-4 w-4 shrink-0" />
-        <span v-if="!isCollapsed">Sign Out</span>
-      </button>
-    </div>
-  </aside>
+    </template>
+  </BaseSidebar>
 </template>

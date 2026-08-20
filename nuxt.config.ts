@@ -1,7 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
-  devtools: { enabled: true },
+  devtools: { enabled: process.env.NODE_ENV === 'development' },
 
   experimental: {
     payloadExtraction: true,
@@ -23,6 +23,25 @@ export default defineNuxtConfig({
     '/api/customer/**': { cache: false },
     // Bookings — no cache (fresh data required)
     '/api/bookings/**': { cache: false },
+    // Auth pages — no SSR to prevent session/data leakage during server render
+    '/login': { noSSR: true },
+    '/register': { noSSR: true },
+    '/customer/login': { noSSR: true },
+    '/customer/register': { noSSR: true },
+    '/auth/verify-email': { noSSR: true },
+    // Heavy admin routes — no SSR (data loaded client-side, reduces server load)
+    '/admin/loyalty/members': { noSSR: true },
+    '/admin/loyalty/rewards': { noSSR: true },
+    '/admin/loyalty/transactions': { noSSR: true },
+    '/admin/staff': { noSSR: true },
+    '/admin/bookings/**': { noSSR: true },
+    '/admin/payments/verification': { noSSR: true },
+    '/admin/calendar': { noSSR: true },
+    '/admin/reports': { noSSR: true },
+    // Super-admin heavy routes — no SSR
+    '/super-admin/analytics': { noSSR: true },
+    '/super-admin/subscriptions': { noSSR: true },
+    '/super-admin/shops/**': { noSSR: true },
   },
 
   modules: [

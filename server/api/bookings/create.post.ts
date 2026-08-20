@@ -17,7 +17,8 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { JS_DAY_TO_NAME } from '~/utils/dayMapping'
+import { getDayOfWeekName } from '~/utils/server/dateUtils'
+import { bookingRateLimiter } from '~/utils/server/rateLimiter'
 
 const createBookingSchema = z.object({
   shopId: z.string().uuid(),
@@ -42,6 +43,25 @@ const createBookingSchema = z.object({
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
+
+  // Rate limiting: 5 requests per 5 minutes per IP
+  await bookingRateLimiter.check(event)
+
+  // Verify caller identity if Authorization header present
+  const authHeader = getHeader(event, 'authorization')
+  let tokenUserId: string | null = null
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.substring(7)
+    const supabasePublic = createClient(
+      config.public.supabaseUrl as string,
+      config.public.supabaseKey as string
+    )
+    const { data: { user: authUser } } = await supabasePublic.auth.getUser(token)
+    if (authUser) {
+      tokenUserId = authUser.id
+    }
+  }
+
   const body = await readBody(event)
 
   // Step 1: Validate
@@ -61,6 +81,14 @@ export default defineEventHandler(async (event) => {
     paymentMethodId, paymongoMethod,
     rewardId, pointsRedeemed, discountApplied,
   } = parsed.data
+
+  // Verify customerId matches the authenticated user's token
+  if (customerId && tokenUserId && customerId !== tokenUserId) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'customerId does not match authenticated user',
+    })
+  }
 
   const supabase = createClient(
     config.public.supabaseUrl as string,
@@ -141,7 +169,7 @@ export default defineEventHandler(async (event) => {
       })
 
       if (authError) {
-        // If email already registered in Auth but not in users table, try to look up by email again
+        // If email already registered in Auth but not in users table, recover by looking up the auth user
         console.error('Auth signup error for guest:', authError.message)
         const { data: retryUser } = await supabase
           .from('users')
@@ -150,9 +178,27 @@ export default defineEventHandler(async (event) => {
           .maybeSingle()
         if (retryUser) {
           resolvedCustomerId = retryUser.id
-        } else {
-          // Cannot create account — proceed without customer_id (booking still created)
-          console.error('Could not resolve customer_id for guest email:', customerEmail)
+        } else if (authError.message?.includes('already registered')) {
+          // Orphan case: email exists in Auth but has no users table record.
+          // Look up the auth user ID and create the missing profile.
+          const { data: authUsers } = await supabase.auth.admin.listUsers(10, { filter: { email: customerEmail } })
+          const authUser = authUsers?.users?.[0]
+          if (authUser?.id) {
+            const { error: userInsertError } = await supabase.from('users').insert({
+              id: authUser.id,
+              email: customerEmail,
+              display_name: `${customerFirstName} ${customerLastName}`,
+              phone_number: customerPhone,
+              role: 'customer',
+              is_active: true,
+            })
+            if (userInsertError) {
+              console.error('Failed to insert orphan guest user record:', userInsertError.message)
+            } else {
+              resolvedCustomerId = authUser.id
+              guestAccountCreated = true
+            }
+          }
         }
       } else if (authData?.user) {
         // Create users table record with role='customer'
@@ -173,11 +219,21 @@ export default defineEventHandler(async (event) => {
         }
       }
     }
+
+    // If we still couldn't resolve a customer_id, fail the booking.
+    // Orphaned bookings (customer_id = null) cannot be managed by the customer
+    // (dashboard queries by customer_id), leaving them permanently locked out.
+    if (!resolvedCustomerId) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Could not create or locate your account. Please try again or contact support.',
+      })
+    }
   }
 
   // Step 2: Re-check availability (race condition protection)
-  const dateObj = new Date(date + 'T00:00:00')
-  const dayOfWeek = JS_DAY_TO_NAME[dateObj.getDay()]
+  const timezone = shop.timezone || 'Asia/Manila'
+  const dayOfWeek = getDayOfWeekName(date, timezone)
   const workingHours = shop.working_hours as Array<{
     day: string; open: string; close: string; is_open: boolean
   }>

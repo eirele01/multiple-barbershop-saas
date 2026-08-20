@@ -1,5 +1,5 @@
 import type { SubscriptionPlan, TierLimitCheck } from '~/types/database'
-import { TIER_LIMITS } from '~/types/database'
+import { TIER_LIMITS } from '~/constants/tierLimits'
 
 type TierLimitResource = 'services' | 'gallery' | 'products' | 'staff'
 

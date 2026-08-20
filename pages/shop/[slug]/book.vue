@@ -103,15 +103,7 @@ const filteredServices = computed(() => {
 })
 
 // ── Format helpers ──
-function formatTime(time: string): string {
-  const [h, m] = time.split(':').map(Number)
-  const period = h >= 12 ? 'PM' : 'AM'
-  return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${period}`
-}
-
-function formatPrice(price: number): string {
-  return `₱${price.toLocaleString()}`
-}
+const { formatPrice, formatTime } = useFormat()
 
 // ── Time slot grouping ──
 const morningSlots = computed(() =>
@@ -147,7 +139,7 @@ async function fetchAvailability(date: string) {
       }
     )
     wizard.setAvailableSlots(result.slots || [])
-  } catch (err: any) {
+  } catch (err: unknown) {
     wizard.setAvailableSlots([])
     availabilityError.value = 'Failed to load time slots. Please try again.'
   } finally {
@@ -304,14 +296,8 @@ const loyaltyRewards = ref<LoyaltyReward[]>([])
 async function fetchLoyaltyData() {
   if (!isUpgraded.value || !authStore.isAuthenticated || !shop.value) return
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    const response = await $fetch('/api/customer/loyalty/status', {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+    const { authFetch } = useAuthFetch()
+    const response = await authFetch('/api/customer/loyalty/status', {
       params: { shopId: shop.value.id },
     }) as any
 
@@ -320,15 +306,9 @@ async function fetchLoyaltyData() {
       customerTotalEarned.value = response.totalEarned || 0
     }
 
-    const { data: rewards } = await useSupabase()
-      .from('loyalty_rewards')
-      .select('*')
-      .eq('shop_id', shop.value.id)
-      .eq('is_active', true)
-
-    loyaltyRewards.value = (rewards || []) as LoyaltyReward[]
+    loyaltyRewards.value = (response.rewards || []) as LoyaltyReward[]
   } catch (err) {
-    console.error('Failed to fetch loyalty data:', err)
+    showToast('Could not load loyalty data. Loyalty features may not be available.', 'error')
   }
 }
 
@@ -431,6 +411,14 @@ const showManual = computed(() => {
   return shop.value?.manual_payment_enabled && manualPaymentMethods.value.length > 0
 })
 
+// ── Name parsing helper ──
+function parseDisplayName(name: string | undefined | null): { firstName: string; lastName: string } {
+  if (!name?.trim()) return { firstName: '', lastName: '' }
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return { firstName: parts[0], lastName: parts[0] }
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+}
+
 // ── Step 6: Submit booking ──
 const submitError = ref('')
 
@@ -440,7 +428,11 @@ async function submitBooking() {
   submitError.value = ''
 
   try {
-    const result = await $fetch<{
+    // Use authFetch for authenticated users to attach Bearer token (security: server verifies customerId matches token)
+    // Guests use $fetch directly — no token, server creates guest account
+    const fetcher = (authStore.isAuthenticated ? useAuthFetch().authFetch : $fetch) as typeof $fetch
+
+    const result = await fetcher<{
       bookingId: string
       bookingRef: string
       status: string
@@ -457,10 +449,10 @@ async function submitBooking() {
         date: wizard.selectedDate,
         startTime: wizard.selectedTime,
         customerFirstName: authStore.isAuthenticated
-          ? (authStore.user?.display_name?.split(' ')[0] || '')
+          ? parseDisplayName(authStore.user?.display_name).firstName
           : wizard.customerInfo.firstName,
         customerLastName: authStore.isAuthenticated
-          ? (authStore.user?.display_name?.split(' ').slice(1).join(' ') || '')
+          ? parseDisplayName(authStore.user?.display_name).lastName
           : wizard.customerInfo.lastName,
         customerPhone: authStore.isAuthenticated
           ? (authStore.user?.phone_number || '')
@@ -482,8 +474,8 @@ async function submitBooking() {
 
     // If PayMongo → redirect to payment link
     if (result.paymentType === 'paymongo') {
-      try {
-        const linkResult = await $fetch<{ checkoutUrl: string }>(
+                        try {
+        const linkResult = await fetcher<{ checkoutUrl: string }>(
           '/api/payments/create-paymongo-link',
           {
             method: 'POST',
@@ -498,14 +490,14 @@ async function submitBooking() {
         window.location.href = linkResult.checkoutUrl
         return
       } catch (err) {
-        console.error('PayMongo link creation failed:', err)
         submitError.value = 'Payment link creation failed. Please try again.'
+        showToast('Payment link creation failed. Please try again.', 'error', 5000)
       }
     }
 
     // Move to step 6 (confirmation)
     wizard.nextStep()
-  } catch (err: any) {
+  } catch (err: unknown) {
     const msg = err?.data?.statusMessage || err?.message || 'Failed to create booking. Please try again.'
     submitError.value = msg
     showToast(msg, 'error', 5000)
@@ -612,7 +604,7 @@ async function handleLogin() {
     await authStore.signIn(loginEmail.value, loginPassword.value)
     showLoginModal.value = false
     showToast('Welcome back!', 'success')
-  } catch (err: any) {
+  } catch (err: unknown) {
     loginError.value = err.message || 'Login failed'
   } finally {
     loginLoading.value = false
@@ -643,7 +635,7 @@ function validatePhone() {
   const val = wizard.customerInfo.phone.trim()
   if (!val) { phoneError.value = 'Phone number is required'; return false }
   const phoneClean = val.replace(/[\s\-()]/g, '')
-  if (!/^(09\d{9}|\+63\d{10}|0\d{10})$/.test(phoneClean)) {
+  if (!/^(09\d{9}|\+639\d{9}|0\d{10})$/.test(phoneClean)) {
     phoneError.value = 'Enter a valid Philippine phone number (e.g., 0917 123 4567 or +63...)'
     return false
   }
@@ -676,7 +668,7 @@ const hasStep4Errors = computed(() =>
 )
 
 const canProceedStep4 = computed(() =>
-  wizard.canProceedFromStep4 && !hasStep4Errors.value
+  (authStore.isAuthenticated || wizard.canProceedFromStep4Base) && !hasStep4Errors.value
 )
 
 // Clear errors on input
@@ -1282,12 +1274,12 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                 >
                   Login
                 </button>
-                <button
-                  class="btn-design rounded-btn border border-[var(--color-deep)] px-4 py-2.5 text-xs font-semibold text-[var(--color-deep)] min-h-[44px]"
-                  @click="showLoginModal = true"
+                <NuxtLink
+                  to="/login?tab=create"
+                  class="btn-design rounded-btn border border-[var(--color-deep)] px-4 py-2.5 text-xs font-semibold text-[var(--color-deep)] min-h-[44px] inline-flex items-center"
                 >
                   Create Account
-                </button>
+                </NuxtLink>
               </div>
             </div>
 

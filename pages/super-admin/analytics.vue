@@ -32,6 +32,7 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler)
 
 const toast = useToast()
+const { authFetch } = useAuthFetch()
 
 // ─── Date Range ────────────────────────────────────
 const dateFrom = ref('')
@@ -67,26 +68,15 @@ const topShopsByBookings = ref<{ labels: string[], data: number[] }>({ labels: [
 const topShopsByRevenue = ref<{ labels: string[], data: number[] }>({ labels: [], data: [] })
 const planGrowth = ref<{ labels: string[], basic: number[], upgraded: number[] }>({ labels: [], basic: [], upgraded: [] })
 
-// ─── Get Auth Token ────────────────────────────────
-async function getAuthToken(): Promise<string | null> {
-  const supabase = useSupabase()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token || null
-}
-
 // ─── Fetch Analytics ───────────────────────────────
 async function fetchAnalytics() {
   isLoading.value = true
   try {
-    const token = await getAuthToken()
-    if (!token) return
-
-    const data = await $fetch('/api/super-admin/analytics', {
+    const data = await authFetch('/api/super-admin/analytics', {
       params: {
         dateFrom: dateFrom.value,
         dateTo: dateTo.value,
       },
-      headers: { Authorization: `Bearer ${token}` },
     }) as any
 
     // Process metrics
@@ -138,9 +128,9 @@ async function fetchAnalytics() {
         upgraded: data.planGrowthOverTime.map((r: any) => r.upgradedCount ?? 0),
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     toast.error('Failed to load analytics')
-    console.error('Error fetching analytics:', error)
+    console.error('Error fetching analytics:', error) // logged to console for debugging
   } finally {
     isLoading.value = false
   }
@@ -313,9 +303,7 @@ const planGrowthChartData = computed(() => ({
 }))
 
 // ─── Helpers ───────────────────────────────────────
-function formatPrice(price: number): string {
-  return `₱${Number(price).toLocaleString()}`
-}
+const { formatPrice } = useFormat()
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`

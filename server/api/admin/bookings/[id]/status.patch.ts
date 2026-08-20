@@ -16,6 +16,7 @@ import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { getCustomerBalance } from '~/utils/server/loyaltyEngine'
 import { changeBookingStatus } from '~/utils/server/bookingStatusChange'
+import { SHOP_STAFF_ROLES } from '~/constants/roles'
 
 const statusChangeSchema = z.object({
   status: z.enum(['confirmed', 'in_progress', 'cancelled', 'no_show']),
@@ -52,7 +53,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'No shop assigned' })
   }
 
-  if (!['admin', 'manager', 'cashier', 'barber'].includes(userData.role || '')) {
+  if (!SHOP_STAFF_ROLES.includes(userData.role || '')) {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 

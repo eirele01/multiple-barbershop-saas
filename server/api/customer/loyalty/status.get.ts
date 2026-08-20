@@ -10,28 +10,28 @@ import { createClient } from '@supabase/supabase-js'
 import { getCustomerBalance, getCustomerTotalEarned, getCustomerTier } from '~/utils/server/loyaltyEngine'
 
 export default defineEventHandler(async (event) => {
+  const authHeader = getHeader(event, 'authorization')
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : ''
+  const authUser = await verifyAuth(token)
+
+  // Customer-only access
+  if (authUser.role !== 'customer') {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden: Customer access required' })
+  }
+
   const config = useRuntimeConfig()
   const supabase = createClient(
     config.public.supabaseUrl as string,
     config.supabaseServiceKey as string
   )
 
-  // Auth check
-  const authHeader = getHeader(event, 'authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-
-  const token = authHeader.substring(7)
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token)
-
-  if (authError || !user) {
-    throw createError({ statusCode: 401, statusMessage: 'Invalid token' })
-  }
-
   // Get query params
   const query = getQuery(event)
   const shopId = query.shopId as string | undefined
+
+  if (shopId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(shopId)) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid shopId format' })
+  }
 
   if (shopId) {
     // Return loyalty status for a specific shop
@@ -52,8 +52,8 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    const balance = await getCustomerBalance(shopId, user.id)
-    const totalEarned = await getCustomerTotalEarned(shopId, user.id)
+    const balance = await getCustomerBalance(shopId, authUser.id)
+    const totalEarned = await getCustomerTotalEarned(shopId, authUser.id)
     const tier = getCustomerTier(shop, totalEarned)
 
     // Get available rewards
@@ -80,26 +80,33 @@ export default defineEventHandler(async (event) => {
     const { data: shopPoints } = await supabase
       .from('loyalty_points')
       .select('shop_id')
-      .eq('customer_id', user.id)
+      .eq('customer_id', authUser.id)
 
     const uniqueShopIds = [...new Set((shopPoints || []).map(sp => sp.shop_id))]
 
+    // Batch fetch all shops in one query
+    const { data: shopsBatch } = await supabase
+      .from('shops')
+      .select('id, name, slug, loyalty_enabled, loyalty_tiers_enabled, loyalty_tiers, plan')
+      .in('id', uniqueShopIds)
+
     const results = []
-    for (const sid of uniqueShopIds) {
-      const { data: shop } = await supabase
-        .from('shops')
-        .select('id, name, slug, loyalty_enabled, loyalty_tiers_enabled, loyalty_tiers, plan')
-        .eq('id', sid)
-        .single()
+    const eligibleShops = (shopsBatch || []).filter(s => s && s.loyalty_enabled && s.plan === 'upgraded')
 
-      if (!shop || !shop.loyalty_enabled || shop.plan !== 'upgraded') continue
+    // Parallelize balance/earned queries instead of sequential (N+1 fix)
+    const balanceResults = await Promise.all(
+      eligibleShops.map(s => Promise.all([
+        getCustomerBalance(s.id, authUser.id),
+        getCustomerTotalEarned(s.id, authUser.id),
+      ]))
+    )
 
-      const balance = await getCustomerBalance(sid, user.id)
-      const totalEarned = await getCustomerTotalEarned(sid, user.id)
+    for (const [i, shop] of eligibleShops.entries()) {
+      const [balance, totalEarned] = balanceResults[i]
       const tier = getCustomerTier(shop, totalEarned)
 
       results.push({
-        shopId: sid,
+        shopId: shop.id,
         shopName: shop.name,
         shopSlug: shop.slug,
         balance,

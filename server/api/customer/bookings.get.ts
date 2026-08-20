@@ -12,11 +12,17 @@
  * Customer-only access.
  */
 import { createClient } from '@supabase/supabase-js'
+import { getToday } from '~/utils/server/dateUtils'
 
 export default defineEventHandler(async (event) => {
   const authHeader = getHeader(event, 'authorization')
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : ''
   const authUser = await verifyAuth(token)
+
+  // Customer-only access
+  if (authUser.role !== 'customer') {
+    throw createError({ statusCode: 403, statusMessage: 'Forbidden: Customer access required' })
+  }
 
   const config = useRuntimeConfig()
   const supabase = createClient(
@@ -30,7 +36,7 @@ export default defineEventHandler(async (event) => {
   const page = Math.max(1, parseInt(query.page as string) || 1)
   const limit = Math.min(50, Math.max(1, parseInt(query.limit as string) || 20))
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = getToday('Asia/Manila')
 
   // Build query
   let dbQuery = supabase
@@ -107,11 +113,12 @@ export default defineEventHandler(async (event) => {
 
     for (const booking of bookings) {
       const shop = shopMap.get(booking.shop_id)
+      const { barber_id, ...rest } = booking
       enrichedBookings.push({
-        ...booking,
+        ...rest,
         shopName: shop?.name || 'Unknown Shop',
         shopSlug: shop?.slug,
-        barberName: booking.barber_id ? (barberNameMap.get(booking.barber_id) || 'TBD') : 'TBD',
+        barberName: barber_id ? (barberNameMap.get(barber_id) || 'TBD') : 'TBD',
       })
     }
   }

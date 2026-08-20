@@ -133,18 +133,22 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const encryptionKey = Deno.env.get('NUXT_ENCRYPTION_KEY')!
+    const resendApiKey = Deno.env.get('RESEND_API_KEY') || ''
+    const senderEmail = Deno.env.get('PLATFORM_SENDER_EMAIL') || 'notifications@reservationph.com'
+    const senderName = Deno.env.get('PLATFORM_SENDER_NAME') || 'BarberShop SaaS'
     const siteUrl = Deno.env.get('NUXT_PUBLIC_SITE_URL') || ''
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const resend = new Resend(resendApiKey)
+    const from = `"${senderName}" <${senderEmail}>`
 
-    // Step 1: Fetch all Upgraded shops where email_reminder=true AND resend_api_key IS NOT NULL
+    // Step 1: Fetch all Upgraded shops where email_reminder=true
+    // (no longer requires per-shop resend_api_key — uses platform-level key)
     const { data: shops, error: shopsError } = await supabase
       .from('shops')
-      .select('id, name, slug, resend_api_key, sender_email, sender_name, primary_color, logo_url, phone, reminder_hours')
+      .select('id, name, slug, primary_color, logo_url, phone, reminder_hours')
       .eq('plan', 'upgraded')
       .eq('email_reminder', true)
-      .not('resend_api_key', 'is', null)
 
     if (shopsError) {
       console.error('[REMINDER] Error fetching shops:', shopsError)
@@ -161,18 +165,6 @@ serve(async (req: Request) => {
     // Step 2: For each shop
     for (const shop of shops) {
       try {
-        // Decrypt the Resend API key
-        const decryptedApiKey = await decrypt(shop.resend_api_key, encryptionKey)
-        if (!decryptedApiKey) {
-          console.error(`[REMINDER] Empty decrypted API key for shop ${shop.id}`)
-          continue
-        }
-
-        const resend = new Resend(decryptedApiKey)
-        const senderEmail = shop.sender_email || 'onboarding@resend.dev'
-        const senderName = shop.sender_name || shop.name
-        const from = `"${senderName}" <${senderEmail}>`
-
         const reminderHours: number[] = shop.reminder_hours || [24, 2]
 
         // Step 3: For each reminder_hours value

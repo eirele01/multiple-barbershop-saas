@@ -53,31 +53,32 @@ async function saveProfile() {
     profileErrors.value.display_name = 'Name is required'
     return
   }
+  if (phoneNumber.value.trim()) {
+    const phoneClean = phoneNumber.value.replace(/[\s\-()]/g, '')
+    if (!/^(09\d{9}|\+639\d{9}|0\d{10})$/.test(phoneClean)) {
+      profileErrors.value.phone_number = 'Enter a valid Philippine phone number (e.g., 0917 123 4567)'
+      return
+    }
+  }
 
   isSavingProfile.value = true
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    const response = await $fetch('/api/customer/profile', {
+    const { authFetch } = useAuthFetch()
+    const response = await authFetch('/api/customer/profile', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: {
         display_name: displayName.value.trim(),
         phone_number: phoneNumber.value.trim() || null,
       },
     }) as any
 
-    // Refresh auth store
-    if (authStore.user) {
-      authStore.user.display_name = displayName.value.trim()
-      authStore.user.phone_number = phoneNumber.value.trim() || null
+    // Refresh auth store with server response
+    if (response?.profile && authStore.user) {
+      authStore.$patch({ user: { ...authStore.user, display_name: response.profile.display_name, phone_number: response.profile.phone_number } })
     }
 
     toast.success('Profile updated successfully')
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to update profile'
     toast.error(msg)
   } finally {
@@ -94,8 +95,8 @@ async function changePassword() {
     passwordErrors.value.old_password = 'Current password is required'
     return
   }
-  if (!newPassword.value || newPassword.value.length < 6) {
-    passwordErrors.value.new_password = 'New password must be at least 6 characters'
+  if (!newPassword.value || newPassword.value.length < 8) {
+    passwordErrors.value.new_password = 'New password must be at least 8 characters'
     return
   }
   if (newPassword.value !== confirmPassword.value) {
@@ -105,14 +106,9 @@ async function changePassword() {
 
   isSavingPassword.value = true
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token) return
-
-    await $fetch('/api/customer/profile', {
+    const { authFetch } = useAuthFetch()
+    await authFetch('/api/customer/profile', {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
       body: {
         old_password: oldPassword.value,
         new_password: newPassword.value,
@@ -123,7 +119,7 @@ async function changePassword() {
     oldPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
-  } catch (error: any) {
+  } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || 'Failed to change password'
     toast.error(msg)
   } finally {
@@ -182,8 +178,12 @@ onMounted(() => {
             v-model="phoneNumber"
             type="tel"
             class="input-design w-full rounded-input border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-3 py-2.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-deep)]"
+            :class="profileErrors.phone_number ? 'border-[var(--color-danger)]' : ''"
             placeholder="e.g. 0917 123 4567"
           />
+          <p v-if="profileErrors.phone_number" class="mt-1 text-xs text-[var(--color-danger)]">
+            {{ profileErrors.phone_number }}
+          </p>
         </div>
 
         <!-- Save Profile -->
@@ -226,7 +226,7 @@ onMounted(() => {
             type="password"
             class="input-design w-full rounded-input border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-3 py-2.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-deep)]"
             :class="passwordErrors.new_password ? 'border-[var(--color-danger)]' : ''"
-            placeholder="Enter a new password (min. 6 characters)"
+            placeholder="Enter a new password (min. 8 characters)"
           />
           <p v-if="passwordErrors.new_password" class="mt-1 text-xs text-[var(--color-danger)]">
             {{ passwordErrors.new_password }}

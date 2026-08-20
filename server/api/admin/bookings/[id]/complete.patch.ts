@@ -21,6 +21,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { awardPoints, redeemPoints, calculatePointsToEarn, getCustomerTotalEarned } from '~/utils/server/loyaltyEngine'
+import { SHOP_STAFF_ROLES } from '~/constants/roles'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -52,7 +53,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'No shop assigned' })
   }
 
-  if (!['admin', 'manager', 'cashier', 'barber'].includes(userData.role || '')) {
+  if (!SHOP_STAFF_ROLES.includes(userData.role || '')) {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
