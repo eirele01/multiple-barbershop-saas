@@ -1828,7 +1828,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     </div>
 
     <!-- ──── Mobile Sticky Summary Bar ──── -->
-    <div v-if="wizard.currentStep >= 2 && wizard.currentStep <= 5" class="fixed top-[57px] left-0 right-0 z-20 border-b border-[var(--color-silver)]/30 bg-[var(--color-pure-white)]/95 px-4 py-2 backdrop-blur-sm lg:hidden">
+    <div v-if="wizard.currentStep >= 2 && wizard.currentStep <= 4" class="fixed bottom-20 left-0 right-0 z-20 border-b border-[var(--color-silver)]/30 bg-[var(--color-pure-white)]/95 px-4 py-2 backdrop-blur-sm lg:hidden">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2 min-w-0">
           <p class="truncate text-sm font-medium text-[var(--color-deep)]">

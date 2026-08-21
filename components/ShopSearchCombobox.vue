@@ -178,39 +178,41 @@ watch(searchQuery, (val) => {
       @submit.prevent="handleSubmit"
     >
       <!-- Search icon -->
-      <div class="flex items-center pl-3.5">
+      <div class="flex flex-shrink-0 items-center pl-3.5">
         <Icon name="lucide:search" class="h-4 w-4 text-[var(--color-titanium)]" />
       </div>
 
-      <!-- Input -->
-      <input
-        v-model="searchQuery"
-        type="text"
-        placeholder="Search shops..."
-        autocomplete="off"
-        class="flex-1 border-0 bg-[var(--color-pure-white)] px-3 py-2.5 text-sm text-[var(--color-deep)] placeholder-[var(--color-silver)] focus:outline-none focus:ring-0"
-        @focus="openDropdown"
-        @click="openDropdown"
-        @keydown="handleKeydown"
-      />
+      <!-- Input wrapper (relative for clear button positioning) -->
+      <div class="relative min-w-0 flex-1">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search shops..."
+          autocomplete="off"
+          class="w-full border-0 bg-[var(--color-pure-white)] py-2.5 pr-9 pl-3 text-sm text-[var(--color-deep)] placeholder-[var(--color-silver)] focus:outline-none focus:ring-0"
+          @focus="openDropdown"
+          @click="openDropdown"
+          @keydown="handleKeydown"
+        />
 
-      <!-- Clear button -->
-      <button
-        v-if="searchQuery"
-        type="button"
-        class="flex items-center px-2 text-[var(--color-titanium)] hover:text-[var(--color-deep)]"
-        @click="searchQuery = ''; selectedShop = null"
-      >
-        <Icon name="lucide:x" class="h-3.5 w-3.5" />
-      </button>
+        <!-- Clear button (absolute positioned - doesn't affect layout) -->
+        <button
+          v-if="searchQuery"
+          type="button"
+          class="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-[var(--color-titanium)] hover:bg-[var(--color-silver)]/20 hover:text-[var(--color-deep)]"
+          @click.stop="searchQuery = ''; selectedShop = null"
+        >
+          <Icon name="lucide:x" class="h-3.5 w-3.5" />
+        </button>
+      </div>
 
-      <!-- Go button -->
+      <!-- Go button (flex-shrink-0 ensures it never gets squished) -->
       <button
         type="submit"
-        class="flex items-center gap-1.5 bg-[var(--color-deep)] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--color-titanium)]"
+        class="flex flex-shrink-0 items-center gap-1.5 bg-[var(--color-deep)] px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[var(--color-titanium)] sm:px-4"
       >
         <Icon name="lucide:arrow-right" class="h-4 w-4" />
-        Go
+        <span class="hidden sm:inline">Go</span>
       </button>
     </form>
 

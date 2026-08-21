@@ -12,6 +12,7 @@
  * Accessible by: admin, manager
  */
 import { createClient } from '@supabase/supabase-js'
+import { geocodeAddress } from '~/server/utils/geocode'
 
 const EDITABLE_FIELDS = [
   'name',
@@ -113,6 +114,35 @@ export default defineEventHandler(async (event) => {
       } catch {
         throw createError({ statusCode: 400, statusMessage: `${urlField.replace('_', ' ')} must be a valid URL` })
       }
+    }
+  }
+
+  // If any address field changed, re-geocode to keep latitude/longitude in sync
+  const addressFieldsChanged = ['address_street', 'address_city', 'address_state', 'address_zip']
+    .some((field) => field in updates)
+
+  if (addressFieldsChanged) {
+    // Need the full current address — merge existing shop data with incoming updates,
+    // since a PATCH might only include e.g. address_city and not the full address
+    const { data: currentShop } = await supabaseAdmin
+      .from('shops')
+      .select('address_street, address_city, address_state, address_zip')
+      .eq('id', userProfile.shop_id)
+      .single()
+
+    const coords = await geocodeAddress({
+      street: updates.address_street ?? currentShop?.address_street,
+      city: updates.address_city ?? currentShop?.address_city,
+      state: updates.address_state ?? currentShop?.address_state,
+      zip: updates.address_zip ?? currentShop?.address_zip,
+      country: 'Philippines',
+    })
+
+    // Only overwrite if geocoding succeeded — don't null out existing good coordinates
+    // just because Nominatim had a hiccup
+    if (coords) {
+      updates.latitude = coords.latitude
+      updates.longitude = coords.longitude
     }
   }
 

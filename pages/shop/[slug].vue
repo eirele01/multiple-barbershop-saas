@@ -11,6 +11,7 @@
  * Performance: Lazy loading, deferred observers
  * Accessibility: ARIA labels, safeTextColor, tab roles
  */
+import LeafletMap from '~/components/LeafletMap.vue'
 import type { Shop, Service, Barber, GalleryImage, Product, WorkingHoursDay } from '~/types/database'
 
 definePageMeta({
@@ -682,7 +683,7 @@ const currentDayName = computed(() => {
            SECTION 1: HERO — Cinematic Dark
            ════════════════════════════════════════ -->
       <section class="shop-hero relative">
-        <div class="shop-hero-cover relative h-[380px] sm:h-[460px] md:h-[520px] overflow-hidden">
+        <div class="shop-hero-cover relative h-[420px] sm:h-[460px] md:h-[520px] overflow-hidden">
           <img v-if="shop.cover_image_url" :src="shop.cover_image_url" :alt="`${shop.name} cover`" class="h-full w-full object-cover ken-burns" />
           <div v-else class="h-full w-full" :style="{ background: `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%)` }" />
           <!-- Dark gradient overlay -->
@@ -700,7 +701,7 @@ const currentDayName = computed(() => {
             </span>
           </div>
           <!-- Hero content — centered over image -->
-          <div class="absolute inset-0 z-10 flex flex-col items-center justify-end pb-8 sm:pb-12 md:pb-16 px-4 text-center">
+          <div class="absolute inset-0 z-10 flex flex-col items-center justify-end pt-16 pb-8 sm:pt-0 sm:pb-12 md:pb-16 px-4 text-center">
             <div class="hero-text-animate flex flex-col items-center">
               <!-- Prominent shop logo — overlapping cover -->
               <div v-if="shop.logo_url" class="mb-4 sm:mb-5 hero-logo-animate">
@@ -1158,12 +1159,28 @@ const currentDayName = computed(() => {
             <!-- Map -->
             <div class="dark-glass-card overflow-hidden">
               <div class="h-full min-h-[300px]">
-                <iframe v-if="shop.latitude && shop.longitude && googleMapsApiKey" :src="`https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${shop.latitude},${shop.longitude}&zoom=15`" width="100%" height="100%" style="border:0; min-height: 300px;" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade" class="h-full w-full" />
-                <div v-else class="flex h-full min-h-[300px] items-center justify-center bg-white/[0.02]">
-                  <div class="text-center"><Icon name="lucide:map" class="mx-auto h-12 w-12 brand-text-30" /><p class="mt-3 text-sm text-[var(--text-muted)]">{{ [shop.address_street, shop.address_city].filter(Boolean).join(', ') || 'Location not set' }}</p></div>
+                <ClientOnly>
+                  <LeafletMap
+                    v-if="shop.latitude && shop.longitude"
+                    :latitude="shop.latitude"
+                    :longitude="shop.longitude"
+                    :shop-name="shop.name"
+                    :brand-color="brandColor"
+                  />
+                  <template #fallback>
+                    <div class="flex h-full min-h-[300px] items-center justify-center bg-white/[0.02]">
+                      <Icon name="lucide:loader-2" class="h-8 w-8 animate-spin brand-text-30" />
+                    </div>
+                  </template>
+                </ClientOnly>
+                <div v-if="!shop.latitude || !shop.longitude" class="flex h-full min-h-[300px] items-center justify-center bg-white/[0.02]">
+                  <div class="text-center">
+                    <Icon name="lucide:map" class="mx-auto h-12 w-12 brand-text-30" />
+                    <p class="mt-3 text-sm text-[var(--text-muted)]">{{ [shop.address_street, shop.address_city].filter(Boolean).join(', ') || 'Location not set' }}</p>
+                  </div>
                 </div>
               </div>
-              <a v-if="directionsUrl" :href="directionsUrl" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 p-3 text-sm font-medium transition-opacity hover:opacity-90" :style="{ backgroundColor: primaryColor, color: safeTextColor }">
+              <a v-if="directionsUrl" :href="directionsUrl" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 p-3 text-sm font-medium transition-opacity             hover:opacity-90" :style="{ backgroundColor: primaryColor, color: safeTextColor }">
                 <Icon name="lucide:navigation" class="h-4 w-4" /> Get Directions
               </a>
             </div>
@@ -1199,7 +1216,7 @@ const currentDayName = computed(() => {
                 <a v-if="shop.phone" :href="`tel:${shop.phone}`" class="flex items-center gap-1 transition-colors hover-brand-text"><Icon name="lucide:phone" class="h-3 w-3" /> {{ shop.phone }}</a>
                 <a v-if="shop.email" :href="`mailto:${shop.email}`" class="flex items-center gap-1 transition-colors hover-brand-text"><Icon name="lucide:mail" class="h-3 w-3" /> {{ shop.email }}</a>
               </div>
-              <span class="inline-flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-[10px] text-[var(--text-faint)]"><Icon name="lucide:zap" class="h-3 w-3" /> Powered by Barbershop SaaS</span>
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-[10px] text-[var(--text-faint)]"><Icon name="lucide:zap" class="h-3 w-3" /> Powered by Reservation PH SaaS</span>
             </div>
           </div>
         </div>
