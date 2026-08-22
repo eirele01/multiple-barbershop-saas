@@ -454,8 +454,8 @@ async function submitBooking() {
         customerLastName: authStore.isAuthenticated
           ? parseDisplayName(authStore.user?.display_name).lastName
           : wizard.customerInfo.lastName,
-        customerPhone: authStore.isAuthenticated
-          ? (authStore.user?.phone_number || '')
+                customerPhone: authStore.isAuthenticated
+          ? (authStore.user?.phone_number || wizard.customerInfo.phone)
           : wizard.customerInfo.phone,
         customerEmail: authStore.isAuthenticated
           ? (authStore.user?.email || '')
@@ -611,6 +611,83 @@ async function handleLogin() {
   }
 }
 
+// ── Create Account modal state ──
+const showCreateModal = ref(false)
+const createDisplayName = ref('')
+const createEmail = ref('')
+const createPhone = ref('')
+const createPassword = ref('')
+const createConfirmPassword = ref('')
+const createLoading = ref(false)
+const createError = ref('')
+const createSuccessNotice = ref(false)
+
+function openCreateModal() {
+  // Prefill from the guest form if the customer already typed their details
+  const guessedName = [wizard.customerInfo.firstName, wizard.customerInfo.lastName]
+    .filter(Boolean).join(' ').trim()
+  createDisplayName.value = guessedName
+  createEmail.value = wizard.customerInfo.email.trim()
+  createPhone.value = wizard.customerInfo.phone.trim()
+  createPassword.value = ''
+  createConfirmPassword.value = ''
+  createError.value = ''
+  createSuccessNotice.value = false
+  showCreateModal.value = true
+}
+
+function switchToLoginModal() {
+  showCreateModal.value = false
+  showLoginModal.value = true
+}
+
+async function handleCreateAccount() {
+  const name = createDisplayName.value.trim()
+  const email = createEmail.value.trim()
+  const phone = createPhone.value.trim()
+  const password = createPassword.value
+
+  if (name.length < 2) { createError.value = 'Please enter your full name (at least 2 characters)'; return }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { createError.value = 'Enter a valid email address'; return }
+  const phoneClean = phone.replace(/[\s\-()]/g, '')
+  if (!/^(09\d{9}|\+639\d{9}|0\d{10})$/.test(phoneClean)) {
+    createError.value = 'Enter a valid Philippine phone number (e.g., 0917 123 4567)'
+    return
+  }
+  if (password.length < 6) { createError.value = 'Password must be at least 6 characters'; return }
+  if (createConfirmPassword.value !== password) { createError.value = 'Passwords do not match'; return }
+
+  createLoading.value = true
+  createError.value = ''
+  try {
+    await authStore.signUp(email, password, name, 'customer', undefined, phone)
+
+    if (authStore.isAuthenticated) {
+      // Session active — Step 4 now shows the "Logged in user" card automatically.
+      // Mirror the phone into the guest form so submitBooking has it as fallback.
+      wizard.updateCustomerInfo({
+        firstName: name.split(/\s+/)[0],
+        lastName: name.split(/\s+/).slice(1).join(' ') || name,
+        email,
+        phone,
+      })
+      showCreateModal.value = false
+      createPassword.value = ''
+      createConfirmPassword.value = ''
+      showToast('Account created! Your booking is now linked to your new account.', 'success', 4500)
+    } else {
+      // Project requires email confirmation before a session is issued
+      showCreateModal.value = false
+      createSuccessNotice.value = true
+      showToast('Account created! Please check your email to confirm, then log in.', 'info', 6000)
+    }
+  } catch (err: unknown) {
+    createError.value = err instanceof Error ? err.message : 'Failed to create account'
+  } finally {
+    createLoading.value = false
+  }
+}
+
 // ── Step 4: Guest form validation ──
 const firstNameError = ref('')
 const lastNameError = ref('')
@@ -649,8 +726,14 @@ function validateEmail() {
   emailError.value = ''; return true
 }
 
+// Accounts created via the modal may lack a stored phone — require one before proceeding
+const needsPhoneFromUser = computed(() =>
+  authStore.isAuthenticated && !authStore.user?.phone_number
+)
+
 function validateStep4AndProceed() {
   if (authStore.isAuthenticated) {
+    if (needsPhoneFromUser.value && !validatePhone()) return
     wizard.nextStep()
     return
   }
@@ -667,9 +750,14 @@ const hasStep4Errors = computed(() =>
   firstNameError.value || lastNameError.value || phoneError.value || emailError.value
 )
 
-const canProceedStep4 = computed(() =>
-  (authStore.isAuthenticated || wizard.canProceedFromStep4Base) && !hasStep4Errors.value
-)
+const canProceedStep4 = computed(() => {
+  const baseOk = authStore.isAuthenticated ? true : wizard.canProceedFromStep4Base
+  // When authenticated but phone missing on profile, require a valid phone entry
+  const phoneOk = needsPhoneFromUser.value
+    ? !!wizard.customerInfo.phone.trim() && !phoneError.value
+    : true
+  return baseOk && phoneOk && !hasStep4Errors.value
+})
 
 // Clear errors on input
 watch(() => wizard.customerInfo.firstName, () => { if (firstNameError.value) firstNameError.value = '' })
@@ -1186,7 +1274,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                   <Icon v-if="!authStore.user?.avatar_url" name="lucide:user" class="h-6 w-6 text-[var(--color-deep)]" />
                   <img v-else :src="authStore.user.avatar_url" alt="Profile" class="h-full w-full object-cover" />
                 </div>
-                <div class="flex-1">
+                                <div class="flex-1">
                   <h4 class="text-sm font-semibold text-[var(--color-deep)]">{{ authStore.user?.display_name }}</h4>
                   <p class="text-xs text-[var(--color-titanium)]">{{ authStore.user?.email }}</p>
                   <p v-if="authStore.user?.phone_number" class="text-xs text-[var(--color-titanium)]">{{ authStore.user?.phone_number }}</p>
@@ -1198,6 +1286,22 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                 >
                   Edit Profile
                 </NuxtLink>
+              </div>
+
+              <!-- Phone missing on profile — required for booking updates -->
+              <div v-if="!authStore.user?.phone_number" class="mt-4 border-t border-[var(--color-silver)]/20 pt-4">
+                <label class="mb-1.5 block text-xs font-medium text-[var(--color-deep)]">Phone Number *</label>
+                <input
+                  v-model="wizard.customerInfo.phone"
+                  type="tel"
+                  placeholder="0917 123 4567"
+                  autocomplete="tel"
+                  class="input-design w-full border bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] outline-none transition-colors focus:border-[var(--color-deep)] focus:ring-1 focus:ring-[var(--color-deep)] min-h-[44px]"
+                  :class="phoneError ? 'border-[var(--color-danger)]' : 'border-[var(--color-silver)]/50'"
+                  @blur="validatePhone"
+                />
+                <p v-if="phoneError" class="mt-1 text-xs text-[var(--color-danger)]">{{ phoneError }}</p>
+                <p class="mt-1 text-xs text-[var(--color-titanium)]">We need this to send booking updates.</p>
               </div>
             </div>
 
@@ -1261,7 +1365,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
               </div>
             </div>
 
-            <!-- Loyalty login prompt (upgraded shops only, guests only) -->
+                        <!-- Loyalty login prompt (upgraded shops only, guests only) -->
             <div v-if="isUpgraded && !authStore.isAuthenticated" class="mt-4 rounded-card bg-[var(--color-info)]/5 border border-[var(--color-info)]/20 p-4">
               <div class="flex items-center gap-2">
                 <Icon name="lucide:gift" class="h-5 w-5 text-[var(--color-info)]" />
@@ -1274,12 +1378,31 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                 >
                   Login
                 </button>
-                <NuxtLink
-                  to="/login?tab=create"
+                <button
                   class="btn-design rounded-btn border border-[var(--color-deep)] px-4 py-2.5 text-xs font-semibold text-[var(--color-deep)] min-h-[44px] inline-flex items-center"
+                  @click="openCreateModal()"
                 >
                   Create Account
-                </NuxtLink>
+                </button>
+              </div>
+            </div>
+
+            <!-- Email confirmation notice (account created but needs email verification) -->
+            <div v-if="createSuccessNotice && !authStore.isAuthenticated" class="mt-4 rounded-card bg-[var(--color-warning)]/5 border border-[var(--color-warning)]/20 p-4">
+              <div class="flex items-start gap-3">
+                <Icon name="lucide:mail-check" class="mt-0.5 h-5 w-5 flex-shrink-0 text-[var(--color-warning)]" />
+                <div>
+                  <p class="text-sm font-medium text-[var(--color-deep)]">Account created — confirm your email</p>
+                  <p class="mt-1 text-xs text-[var(--color-titanium)]">
+                    We sent a confirmation link to <strong>{{ createEmail }}</strong>. You can continue as a guest now, and log in once confirmed.
+                  </p>
+                  <button
+                    class="mt-2 text-xs font-medium text-[var(--color-info)] hover:underline min-h-[44px]"
+                    @click="switchToLoginModal()"
+                  >
+                    I've confirmed — Login instead
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1915,7 +2038,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
             <p v-if="loginError" class="text-xs text-[var(--color-danger)]">{{ loginError }}</p>
           </div>
 
-          <div class="mt-6 flex gap-3">
+                    <div class="mt-6 flex gap-3">
             <button
               class="btn-design flex-1 rounded-btn bg-[var(--color-deep)] py-3 text-sm font-semibold text-white min-h-[44px]"
               :disabled="loginLoading"
@@ -1927,6 +2050,99 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
             <button
               class="btn-design rounded-btn border border-[var(--color-silver)] px-4 py-3 text-sm font-medium text-[var(--color-deep)] min-h-[44px]"
               @click="showLoginModal = false"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- ──── Create Account Modal ──── -->
+    <Teleport to="body">
+      <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="showCreateModal = false">
+        <div class="card-design mx-4 w-full max-w-md p-6">
+          <h3 class="text-lg font-bold text-[var(--color-deep)]">Create Account</h3>
+          <p class="mt-1 text-sm text-[var(--color-titanium)]">Save your details and earn loyalty points</p>
+
+          <div class="mt-4 space-y-3">
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-[var(--color-deep)]">Full Name</label>
+              <input
+                v-model="createDisplayName"
+                type="text"
+                placeholder="Juan Dela Cruz"
+                autocomplete="name"
+                class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-deep)] focus:ring-1 focus:ring-[var(--color-deep)] min-h-[44px]"
+                @keyup.enter="handleCreateAccount"
+              />
+            </div>
+                        <div>
+              <label class="mb-1.5 block text-xs font-medium text-[var(--color-deep)]">Email</label>
+              <input
+                v-model="createEmail"
+                type="email"
+                placeholder="your@email.com"
+                autocomplete="email"
+                class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-deep)] focus:ring-1 focus:ring-[var(--color-deep)] min-h-[44px]"
+                @keyup.enter="handleCreateAccount"
+              />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-[var(--color-deep)]">Phone Number</label>
+              <input
+                v-model="createPhone"
+                type="tel"
+                placeholder="0917 123 4567"
+                autocomplete="tel"
+                class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-deep)] focus:ring-1 focus:ring-[var(--color-deep)] min-h-[44px]"
+                @keyup.enter="handleCreateAccount"
+              />
+              <p class="mt-1 text-xs text-[var(--color-titanium)]">Used for booking updates (required)</p>
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-[var(--color-deep)]">Password</label>
+              <input
+                v-model="createPassword"
+                type="password"
+                placeholder="At least 6 characters"
+                autocomplete="new-password"
+                class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-deep)] focus:ring-1 focus:ring-[var(--color-deep)] min-h-[44px]"
+                @keyup.enter="handleCreateAccount"
+              />
+            </div>
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-[var(--color-deep)]">Confirm Password</label>
+              <input
+                v-model="createConfirmPassword"
+                type="password"
+                placeholder="••••••••"
+                autocomplete="new-password"
+                class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-deep)] focus:ring-1 focus:ring-[var(--color-deep)] min-h-[44px]"
+                @keyup.enter="handleCreateAccount"
+              />
+            </div>
+            <p v-if="createError" class="text-xs text-[var(--color-danger)]">{{ createError }}</p>
+            <p class="text-xs text-[var(--color-titanium)]">
+              Already have an account?
+              <button class="font-medium text-[var(--color-info)] hover:underline" @click="switchToLoginModal()">
+                Login instead
+              </button>
+            </p>
+          </div>
+
+          <div class="mt-6 flex gap-3">
+            <button
+              class="btn-design flex-1 rounded-btn bg-[var(--color-deep)] py-3 text-sm font-semibold text-white min-h-[44px] disabled:cursor-not-allowed disabled:opacity-40"
+              :disabled="createLoading"
+              @click="handleCreateAccount"
+            >
+              <Icon v-if="createLoading" name="lucide:loader-2" class="mr-1 inline h-4 w-4 animate-spin" />
+              {{ createLoading ? 'Creating account...' : 'Create Account' }}
+            </button>
+            <button
+              class="btn-design rounded-btn border border-[var(--color-silver)] px-4 py-3 text-sm font-medium text-[var(--color-deep)] min-h-[44px]"
+              @click="showCreateModal = false"
             >
               Cancel
             </button>

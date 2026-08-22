@@ -20,8 +20,16 @@ useHead({
 })
 
 const { data: shopsResponse, error: shopsError } = await useFetch('/api/shops')
+// allShops — alphabetical (API order); feeds the search combobox
 const allShops = computed(() => (shopsResponse.value as any)?.data || [])
-const exampleShops = computed(() => allShops.value.slice(0, 6))
+// exampleShops — "Popular shops" chips sorted by real booking counts
+// (total_bookings provided by the API; cancelled/no-show excluded).
+// JS sort is stable, so ties keep the API's alphabetical order.
+const exampleShops = computed(() =>
+  [...(shopsResponse.value as any)?.data || []]
+    .sort((a: any, b: any) => (b.total_bookings || 0) - (a.total_bookings || 0))
+    .slice(0, 6)
+)
 const shopsLoadError = shopsError.value
 
 // ── Footer platform config ────────────────────────────────

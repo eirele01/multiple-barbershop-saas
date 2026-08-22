@@ -164,7 +164,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async signUp(email: string, password: string, displayName: string, role: UserRole = 'customer', shopId?: string) {
+    async signUp(email: string, password: string, displayName: string, role: UserRole = 'customer', shopId?: string, phoneNumber?: string) {
       const supabase = useSupabase()
 
       const { data, error } = await supabase.auth.signUp({
@@ -183,6 +183,7 @@ export const useAuthStore = defineStore('auth', {
           display_name: displayName,
           role,
           shop_id: shopId || null,
+          phone_number: phoneNumber?.trim() || null,
         })
 
         if (profileError) {

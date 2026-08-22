@@ -75,3 +75,22 @@ export function getToday(timezone = DEFAULT_TIMEZONE): string {
   const day = parts.find(p => p.type === 'day')?.value
   return `${year}-${month}-${day}`
 }
+
+/**
+ * Get the current time-of-day as minutes since midnight in the given timezone.
+ *
+ * Example: at 5:42 PM Manila time → (17 * 60) + 42 = 1062
+ */
+export function getNowMinutesInTimezone(timezone = DEFAULT_TIMEZONE): number {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: timezone,
+  })
+  const parts = formatter.formatToParts(new Date())
+  // Guard against the "24" hour edge case some engines emit at midnight
+  const hours = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10) % 24
+  const minutes = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10)
+  return hours * 60 + minutes
+}

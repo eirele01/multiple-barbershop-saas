@@ -5,8 +5,9 @@
  * Query params:
  * - q: optional search string (filters by name, slug, or city)
  *
- * Returns: array of { slug, name, city, logo_url }
- * Sorted alphabetically by name ascending.
+ * Returns: array of { slug, name, city, logo_url, total_bookings }
+ * Sorted alphabetically by name ascending — consumers (e.g. the homepage)
+ * can re-sort by total_bookings for popularity-ordered displays.
  */
 import { createClient } from '@supabase/supabase-js'
 
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
   let supabaseQuery = supabase
     .from('shops')
-    .select('slug, name, address_city, logo_url')
+    .select('id, slug, name, address_city, logo_url')
     .eq('is_active', true)
     .order('name', { ascending: true })
 
@@ -30,25 +31,7 @@ export default defineEventHandler(async (event) => {
   if (searchQuery) {
     // Escape %, _, ), (, = to prevent PostgREST filter injection
     const safe = searchQuery.replace(/[%_)(=]/g, (c) => `\\${c}`).substring(0, 100)
-    const { data: shops, error } = await supabase
-      .from('shops')
-      .select('slug, name, address_city, logo_url')
-      .eq('is_active', true)
-      .or(`name.ilike.%${safe}%,slug.ilike.%${safe}%,address_city.ilike.%${safe}%`)
-      .order('name', { ascending: true })
-
-    if (error) {
-      throw createError({ statusCode: 500, statusMessage: 'Failed to fetch shops' })
-    }
-
-    return {
-      data: (shops || []).map((s: any) => ({
-        slug: s.slug,
-        name: s.name,
-        city: s.address_city || null,
-        logo_url: s.logo_url || null,
-      })),
-    }
+    supabaseQuery = supabaseQuery.or(`name.ilike.%${safe}%,slug.ilike.%${safe}%,address_city.ilike.%${safe}%`)
   }
 
   const { data: shops, error } = await supabaseQuery
@@ -57,12 +40,39 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Failed to fetch shops' })
   }
 
+  const activeShops = shops || []
+
+  if (activeShops.length === 0) {
+    return { data: [] }
+  }
+
+  // ── Booking counts per shop (popularity signal) ──
+  // Same technique as server/api/super-admin/shops/index.get.ts.
+  // Single lightweight query (shop_id column only).
+  // Cancelled & no-show bookings are excluded so the count
+  // reflects genuine activity.
+  const shopIds = activeShops.map(s => s.id)
+  const { data: bookingRows } = await supabase
+    .from('bookings')
+    .select('shop_id')
+    .in('shop_id', shopIds)
+    .not('status', 'in', '(cancelled,no_show)')
+
+  const bookingCountMap = new Map<string, number>()
+  if (bookingRows) {
+    for (const row of bookingRows) {
+      bookingCountMap.set(row.shop_id, (bookingCountMap.get(row.shop_id) || 0) + 1)
+    }
+  }
+
+  // Alphabetical order preserved — consumers re-sort by total_bookings if needed
   return {
-    data: (shops || []).map((s: any) => ({
+    data: activeShops.map((s: any) => ({
       slug: s.slug,
       name: s.name,
       city: s.address_city || null,
       logo_url: s.logo_url || null,
+      total_bookings: bookingCountMap.get(s.id) || 0,
     })),
   }
 })

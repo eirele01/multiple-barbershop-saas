@@ -16,7 +16,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { getDayOfWeekName } from '~/utils/server/dateUtils'
+import { getDayOfWeekName, getToday, getNowMinutesInTimezone } from '~/utils/server/dateUtils'
 
 const availabilitySchema = z.object({
   shopId: z.string().uuid('Invalid shop ID'),
@@ -99,10 +99,20 @@ export default defineEventHandler(async (event) => {
   const slotDuration = bookingSettings.slot_duration || 30
   const bufferTime = bookingSettings.buffer_time || 0
 
+        // ── Past-slot filtering: hide slots earlier than "now" when date is today
+  //    (computed in the shop's timezone so bookings match local business time)
+  const isToday = date === getToday(timezone)
+  const nowMinutes = getNowMinutesInTimezone(timezone)
+
+  function filterPastSlots(slots: string[]): string[] {
+    if (!isToday) return slots
+    return slots.filter((s) => timeToMinutes(s) > nowMinutes)
+  }
+
   /**
    * Compute available slots for a single barber
    */
-  async function computeBarberSlots(barberRecord: {
+async function computeBarberSlots(barberRecord: {
     id: string
     schedule: Record<string, any>
     time_off: Array<{ start_date: string; end_date: string; reason: string }>
@@ -253,10 +263,10 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // Sort slots chronologically
+        // Sort slots chronologically
     const sortedSlots = Array.from(slotUnion).sort()
 
-    return { slots: sortedSlots, timezone }
+    return { slots: filterPastSlots(sortedSlots), timezone }
   }
 
   // Specific barber requested
@@ -271,8 +281,8 @@ export default defineEventHandler(async (event) => {
     return { slots: [], timezone }
   }
 
-  const slots = await computeBarberSlots(barber)
-  return { slots, timezone }
+    const slots = await computeBarberSlots(barber)
+  return { slots: filterPastSlots(slots), timezone }
 })
 
 // Helper: Convert "HH:MM" to minutes since midnight

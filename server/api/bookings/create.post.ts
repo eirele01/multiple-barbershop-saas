@@ -18,7 +18,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { randomBytes } from 'node:crypto'
-import { getDayOfWeekName } from '~/utils/server/dateUtils'
+import { getDayOfWeekName, getToday, getNowMinutesInTimezone } from '~/utils/server/dateUtils'
 import { bookingRateLimiter } from '~/utils/server/rateLimiter'
 
 const createBookingSchema = z.object({
@@ -142,8 +142,23 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Shop not found' })
   }
 
-  if (serviceError || !service) {
+    if (serviceError || !service) {
     throw createError({ statusCode: 404, statusMessage: 'Service not found' })
+  }
+
+  // ── Reject bookings in the past (defense-in-depth: never trust the client) ──
+  // Compared in the shop's timezone so it matches local business time.
+  const shopTimezone = (shop as any).timezone || 'Asia/Manila'
+  const todayStr = getToday(shopTimezone)
+  if (date < todayStr) {
+    throw createError({ statusCode: 400, statusMessage: 'Cannot book a date in the past' })
+  }
+  if (date === todayStr) {
+    const [reqH, reqM] = startTime.split(':').map(Number)
+    const requestedMinutes = reqH * 60 + reqM
+    if (requestedMinutes <= getNowMinutesInTimezone(shopTimezone)) {
+      throw createError({ statusCode: 400, statusMessage: 'Cannot book a time in the past. Please select a later slot.' })
+    }
   }
 
   // Compute end time
