@@ -583,8 +583,8 @@ async function handleRegister() {
       <p class="text-xs text-[var(--color-titanium)]">
         Looking to book an appointment, not open a shop?
         <br />
-        Visit your barbershop's page directly —
-        <NuxtLink to="/#for-customers" class="font-medium text-[var(--color-info)] hover:underline">find your barbershop</NuxtLink>.
+        Visit your shop's page directly —
+        <NuxtLink to="/#for-customers" class="font-medium text-[var(--color-info)] hover:underline">find your shop</NuxtLink>.
       </p>
     </div>
   </div>

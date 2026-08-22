@@ -23,6 +23,36 @@ const { data: shopsResponse, error: shopsError } = await useFetch('/api/shops')
 const allShops = computed(() => (shopsResponse.value as any)?.data || [])
 const exampleShops = computed(() => allShops.value.slice(0, 6))
 const shopsLoadError = shopsError.value
+
+// ── Footer platform config ────────────────────────────────
+// Centralized so official handles / numbers can be swapped in one place.
+const currentYear = new Date().getFullYear()
+
+const platformContact = {
+  email: 'support@reservationph.com',
+  phone: '+63 948 538 8916', // TODO: replace with official number
+  phoneHref: '+639485388916', // TODO: replace with official number
+  address: 'Mandaluyong City, Metro Manila, Philippines',
+}
+
+const socialLinks = [
+  { icon: 'lucide:facebook', label: 'Facebook', href: 'https://facebook.com/reservationph' },
+  { icon: 'lucide:instagram', label: 'Instagram', href: 'https://instagram.com' },
+  { icon: 'lucide:music', label: 'TikTok', href: 'https://tiktok.com/' },
+]
+
+// Newsletter subscribe (decorative for now — wire to your ESP / API later)
+const newsletterEmail = ref('')
+const newsletterDone = ref(false)
+
+function onNewsletterSubmit() {
+  if (!newsletterEmail.value || !/^\S+@\S+\.\S+$/.test(newsletterEmail.value)) return
+  newsletterDone.value = true
+}
+
+function goToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 </script>
 
 <template>
@@ -355,17 +385,136 @@ const shopsLoadError = shopsError.value
     </section>
 
     <!-- Footer -->
-    <footer class="border-t border-[var(--color-silver)]/30 bg-[var(--color-pure-white)] px-4 py-12">
-      <div class="mx-auto max-w-6xl text-center">
-        <div class="flex items-center justify-center gap-2">
-          <div class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn">
-            <Icon name="lucide:scissors" class="h-4 w-4 text-white" />
+    <footer class="border-t border-[var(--color-silver)]/30 bg-[var(--color-white)]">
+      <!-- Metallic hairline signature accent -->
+      <div class="gradient-metallic h-0.5 w-full" />
+
+      <div class="mx-auto max-w-6xl px-4 pt-16 pb-8">
+        <!-- CTA band -->
+        <div class="card-design mb-14 flex flex-col items-center justify-between gap-6 border-2 border-[var(--color-deep)] p-8 text-center lg:flex-row lg:text-left">
+          <div>
+            <h3 class="mb-2 text-2xl font-bold text-[var(--color-deep)]">Ready to modernize your business?</h3>
+            <p class="max-w-xl text-sm text-[var(--color-titanium)]">
+              Get your own booking page with payments, loyalty, and email notifications — set up in minutes.
+            </p>
           </div>
-          <span class="text-lg font-bold text-[var(--color-deep)]">Reservation</span>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <NuxtLink to="/register" class="btn-design rounded-btn bg-[var(--color-deep)] px-7 py-3 text-sm font-semibold text-white transition-all hover:bg-[var(--color-titanium)] hover:shadow-lg">
+              Register Your Shop
+            </NuxtLink>
+            <a href="#for-customers" class="btn-design rounded-btn border border-[var(--color-silver)] px-7 py-3 text-sm font-semibold text-[var(--color-deep)] transition-all hover:border-[var(--color-titanium)]">
+              Book an Appointment
+            </a>
+          </div>
         </div>
-        <p class="mt-4 text-sm text-[var(--color-titanium)]">
-          The modern business management platform.
-        </p>
+
+        <!-- Main grid -->
+        <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <!-- Brand column -->
+          <div>
+            <div class="flex items-center gap-2">
+              <div class="gradient-metallic flex h-9 w-9 items-center justify-center rounded-btn">
+                <Icon name="lucide:calendar" class="h-4 w-4 text-white" />
+              </div>
+              <span class="text-lg font-bold text-[var(--color-deep)]">Reservation</span>
+            </div>
+            <p class="mt-4 max-w-xs text-sm text-[var(--color-titanium)]">
+              The modern booking and business management platform, built for modern businesses.
+            </p>
+
+            <!-- Social links -->
+            <div class="mt-5 flex items-center gap-3">
+              <a
+                v-for="social in socialLinks"
+                :key="social.label"
+                :href="social.href"
+                target="_blank"
+                rel="noopener"
+                :aria-label="social.label"
+                class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-deep)]/5 text-[var(--color-titanium)] transition-all hover:-translate-y-0.5 hover:bg-[var(--color-deep)] hover:text-white"
+              >
+                <Icon :name="social.icon" class="h-4 w-4" />
+              </a>
+            </div>
+          </div>
+
+          <!-- Product links -->
+          <div>
+            <h5 class="text-sm font-semibold text-[var(--color-deep)]">Product</h5>
+            <ul class="mt-4 space-y-2.5 text-sm text-[var(--color-titanium)]">
+              <li><a href="#features" class="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-deep)]"><Icon name="lucide:sparkles" class="h-3.5 w-3.5" /> Features</a></li>
+              <li><a href="#pricing" class="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-deep)]"><Icon name="lucide:tag" class="h-3.5 w-3.5" /> Pricing</a></li>
+              <li><NuxtLink to="/register" class="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-deep)]"><Icon name="lucide:store" class="h-3.5 w-3.5" /> Register Your Shop</NuxtLink></li>
+              <li><a href="#for-customers" class="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-deep)]"><Icon name="lucide:users" class="h-3.5 w-3.5" /> For Customers</a></li>
+            </ul>
+          </div>
+
+          <!-- Company links -->
+          <div>
+            <h5 class="text-sm font-semibold text-[var(--color-deep)]">Company</h5>
+            <ul class="mt-4 space-y-2.5 text-sm text-[var(--color-titanium)]">
+              <li><NuxtLink to="/privacy" class="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-deep)]"><Icon name="lucide:shield" class="h-3.5 w-3.5" /> Privacy Policy</NuxtLink></li>
+              <li><NuxtLink to="/terms" class="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-deep)]"><Icon name="lucide:file-text" class="h-3.5 w-3.5" /> Terms of Service</NuxtLink></li>
+              <li><NuxtLink to="/login?role=customer" class="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--color-deep)]"><Icon name="lucide:log-in" class="h-3.5 w-3.5" /> Customer Login</NuxtLink></li>
+            </ul>
+          </div>
+
+          <!-- Contact -->
+          <div>
+            <h5 class="text-sm font-semibold text-[var(--color-deep)]">Contact</h5>
+            <ul class="mt-4 space-y-2.5 text-sm text-[var(--color-titanium)]">
+              <li>
+                <a :href="`mailto:${platformContact.email}`" class="flex items-center gap-2 transition-colors hover:text-[var(--color-deep)]">
+                  <Icon name="lucide:mail" class="h-3.5 w-3.5 flex-shrink-0" />
+                  {{ platformContact.email }}
+                </a>
+              </li>
+              <li>
+                <a :href="`tel:${platformContact.phoneHref}`" class="flex items-center gap-2 transition-colors hover:text-[var(--color-deep)]">
+                  <Icon name="lucide:phone" class="h-3.5 w-3.5 flex-shrink-0" />
+                  {{ platformContact.phone }}
+                </a>
+              </li>
+              <li class="flex items-start gap-2">
+                <Icon name="lucide:map-pin" class="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                <span>{{ platformContact.address }}</span>
+              </li>
+            </ul>
+<!-- Newsletter -->
+            <form v-if="!newsletterDone" class="mt-5" @submit.prevent="onNewsletterSubmit">
+              <label for="footer-newsletter" class="mb-2 block text-xs font-medium text-[var(--color-titanium)]">Get product updates</label>
+              <div class="flex gap-2">
+                <input
+                  id="footer-newsletter"
+                  v-model="newsletterEmail"
+                  type="email"
+                  required
+                  placeholder="you@email.com"
+                  class="w-full min-w-0 flex-1 rounded-btn border border-[var(--color-silver)]/70 bg-[var(--color-pure-white)] px-3 py-2 text-sm text-[var(--color-deep)] outline-none transition-colors placeholder:text-[var(--color-titanium)]/60 focus:border-[var(--color-info)]"
+                />
+                <button type="submit" aria-label="Subscribe" class="btn-design rounded-btn bg-[var(--color-deep)] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-titanium)]">
+                  <Icon name="lucide:send" class="h-4 w-4" />
+                </button>
+              </div>
+            </form>
+            <p v-else class="mt-5 flex items-center gap-1.5 text-sm font-medium text-[var(--color-success)]">
+              <Icon name="lucide:check-circle" class="h-4 w-4" /> You're in! Thanks for subscribing.
+            </p>
+          </div>
+        </div>
+
+        <!-- Bottom bar -->
+        <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[var(--color-silver)]/30 pt-6 sm:flex-row">
+          <p class="text-xs text-[var(--color-titanium)]">&copy; {{ currentYear }} Reservation PH. All rights reserved.</p>
+          <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-[var(--color-titanium)]">
+            <NuxtLink to="/privacy" class="transition-colors hover:text-[var(--color-deep)]">Privacy</NuxtLink>
+            <NuxtLink to="/terms" class="transition-colors hover:text-[var(--color-deep)]">Terms</NuxtLink>
+            <button type="button" class="inline-flex items-center gap-1 transition-colors hover:text-[var(--color-deep)]" @click="goToTop">
+              <Icon name="lucide:arrow-up" class="h-3 w-3" /> Back to top
+            </button>
+          </div>
+          <p class="text-xs text-[var(--color-titanium)]">Made for Modern businesses</p>
+        </div>
       </div>
     </footer>
   </div>

@@ -17,6 +17,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { randomBytes } from 'node:crypto'
 import { getDayOfWeekName } from '~/utils/server/dateUtils'
 import { bookingRateLimiter } from '~/utils/server/rateLimiter'
 
@@ -40,6 +41,20 @@ const createBookingSchema = z.object({
   pointsRedeemed: z.number().int().min(0).default(0),
   discountApplied: z.number().min(0).default(0),
 })
+
+// Generate a unique booking_ref in the format BK-YYYY-XXXXXX.
+// The suffix is cryptographically random so concurrent creations cannot
+// produce the same reference (the DB's count-based trigger is race-prone).
+function generateBookingRef(): string {
+  const year = new Date().getFullYear()
+  const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const bytes = randomBytes(6)
+  let suffix = ''
+  for (let i = 0; i < 6; i++) {
+    suffix += alphabet[bytes[i] % alphabet.length]
+  }
+  return `BK-${year}-${suffix}`
+}
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -372,6 +387,7 @@ export default defineEventHandler(async (event) => {
       discount_applied: discountApplied,
       points_redeemed: pointsRedeemed,
       points_earned: 0,
+      booking_ref: generateBookingRef(),
     })
     .select('id, booking_ref, status')
     .single()
