@@ -47,6 +47,24 @@ const activeShop = computed(() => {
   return shopLoyaltyList.value.find(s => s.shopId === selectedShopId.value) || null
 })
 
+// Null-safe filtered rewards — avoids runtime errors when activeShop is null
+// during the initial render / when no shop is selected
+const activeRewards = computed(() => {
+  const rewards = activeShop.value?.rewards
+  if (!rewards) return []
+  return rewards.filter(r => r.is_active)
+})
+
+// Null-safe computed counts for the template
+const availableRewardsCount = computed(() => {
+  const shop = activeShop.value
+  if (!shop?.rewards || !shop.balance) return 0
+  return shop.rewards.filter(r => r.points_required <= shop.balance).length
+})
+const totalRewardsCount = computed(() => {
+  return activeShop.value?.rewards?.length || 0
+})
+
 const tierColor = computed(() => {
   const tier = activeShop.value?.tier || 'bronze'
   const colors: Record<string, string> = {
@@ -68,9 +86,9 @@ async function fetchLoyaltyData() {
 
     shopLoyaltyList.value = response.shops || []
 
-    // Auto-select first shop if only one
+        // Auto-select first shop if only one
     if (shopLoyaltyList.value.length === 1) {
-      selectedShopId.value = shopLoyaltyList.value[0].shopId
+            selectedShopId.value = shopLoyaltyList.value[0]?.shopId || null
       await fetchTransactions()
     }
   } catch (error: unknown) {
@@ -244,23 +262,23 @@ onMounted(() => {
         <div class="card-design p-6 text-center">
           <p class="text-xs font-medium uppercase tracking-wider text-[var(--color-titanium)]">Rewards Available</p>
           <p class="mt-2 text-3xl font-bold text-[var(--color-deep)]">
-            {{ activeShop.rewards.filter(r => r.points_required <= activeShop.balance).length }}
+                        {{ availableRewardsCount }}
           </p>
           <p class="mt-1 text-xs text-[var(--color-titanium)]">
-            of {{ activeShop.rewards.length }} total
+            of {{ totalRewardsCount }} total
           </p>
         </div>
       </div>
 
-      <!-- Rewards You Can Redeem -->
+        <!-- Rewards You Can Redeem -->
       <div v-if="activeShop && activeShop.rewards && activeShop.rewards.length > 0" class="card-design p-6">
         <h2 class="mb-4 text-lg font-semibold text-[var(--color-deep)]">Rewards</h2>
         <div class="grid gap-3 sm:grid-cols-2">
           <div
-            v-for="reward in activeShop.rewards"
+            v-for="reward in activeRewards"
             :key="reward.id"
             class="rounded-input border p-4"
-            :class="reward.points_required <= activeShop.balance
+            :class="reward.points_required <= (activeShop?.balance || 0)
               ? 'border-[var(--color-success)]/30 bg-[var(--color-success)]/5'
               : 'border-[var(--color-silver)]/30 opacity-60'"
           >
@@ -269,8 +287,8 @@ onMounted(() => {
               <span class="text-xs font-bold text-[var(--color-deep)]">{{ reward.points_required }} pts</span>
             </div>
             <p v-if="reward.description" class="mt-1 text-xs text-[var(--color-titanium)]">{{ reward.description }}</p>
-            <p v-if="reward.points_required > activeShop.balance" class="mt-2 text-xs text-[var(--color-titanium)]">
-              Need {{ reward.points_required - activeShop.balance }} more points
+            <p v-if="reward.points_required > (activeShop?.balance || 0)" class="mt-2 text-xs text-[var(--color-titanium)]">
+              Need {{ reward.points_required - (activeShop?.balance || 0) }} more points
             </p>
             <p v-else class="mt-2 text-xs font-medium text-[var(--color-success)]">
               Available during booking
