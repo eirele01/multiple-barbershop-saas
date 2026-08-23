@@ -148,7 +148,7 @@ export default defineEventHandler(async (event) => {
 
   // ── Reject bookings in the past (defense-in-depth: never trust the client) ──
   // Compared in the shop's timezone so it matches local business time.
-  const shopTimezone = (shop as any).timezone || 'Asia/Manila'
+    const shopTimezone = shop.timezone || 'Asia/Manila'
   const todayStr = getToday(shopTimezone)
   if (date < todayStr) {
     throw createError({ statusCode: 400, statusMessage: 'Cannot book a date in the past' })
@@ -168,9 +168,12 @@ export default defineEventHandler(async (event) => {
   const endM = totalMinutes % 60
   const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`
 
-  // Step 1b: Guest account creation — ensure every booking has a customer_id
+    // Step 1b: Guest account creation — ensure every booking has a customer_id
   let resolvedCustomerId = customerId || null
   let guestAccountCreated = false
+  // Deferred: the "set your password" email is sent AFTER the booking row
+  // exists (Step 7c) so the email can include the booking reference & details.
+  let pendingGuestEmail: { email: string; name: string } | null = null
 
   if (!resolvedCustomerId) {
     // Check if user with this email already exists in users table
@@ -183,18 +186,20 @@ export default defineEventHandler(async (event) => {
     if (existingUser) {
       // Returning guest — use their existing user_id (no duplicate)
       resolvedCustomerId = existingUser.id
-    } else {
-      // Create a new Supabase Auth user with email_confirm=false
+        } else {
+      // Create a new Supabase Auth user (service role).
+      // email_confirm=true: ownership is proven by the one-time "set your
+      // password" recovery link sent below — this guarantees exactly ONE
+      // email per guest booking regardless of the project's global
+      // "Confirm email" setting.
       const tempPassword = crypto.randomUUID() + crypto.randomUUID() // 72-char random password
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: customerEmail,
         password: tempPassword,
-        options: {
-          emailRedirectTo: undefined, // No redirect — they'll set password via email link
-          data: {
-            display_name: `${customerFirstName} ${customerLastName}`,
-            phone: customerPhone,
-          },
+        email_confirm: true,
+        user_metadata: {
+          display_name: `${customerFirstName} ${customerLastName}`,
+          phone: customerPhone,
         },
       })
 
@@ -241,11 +246,16 @@ export default defineEventHandler(async (event) => {
           is_active: true,
         })
 
-        if (userInsertError) {
+                if (userInsertError) {
           console.error('Failed to insert guest user record:', userInsertError.message)
         } else {
           resolvedCustomerId = authData.user.id
           guestAccountCreated = true
+          // Defer the "set your password" email to Step 7c (after booking exists)
+          pendingGuestEmail = {
+            email: customerEmail,
+            name: `${customerFirstName} ${customerLastName}`,
+          }
         }
       }
     }
@@ -540,9 +550,96 @@ export default defineEventHandler(async (event) => {
         },
       })
     }
-  } catch (emailError) {
+    } catch (emailError) {
     console.error('[BOOKING-CREATE] Error sending confirmation email:', emailError)
     // Don't fail booking creation if email fails
+  }
+
+      // Step 7c: Guest "set your password" email
+  // Deferred from Step 1b so the email can include the booking reference.
+  // Unified for ALL plans: 'account.created' is a platform-generated
+  // account-security email (exempt from the upgrade guard in sendShopEmail).
+  // Flow: generateLink (one-time recovery link, no Supabase email) →
+  //       branded Resend email → fallback to Supabase built-in email if
+  //       Resend fails (best-effort; may hit recovery quota — guest can
+  //       always recover via "Forgot password?" on /login).
+  if (pendingGuestEmail) {
+    try {
+      const siteUrl = config.public.siteUrl || 'http://localhost:3000'
+      const redirectTo = `${siteUrl}/auth/reset-password`
+      const shopPlan = shop.plan
+
+      console.log(`[BOOKING-CREATE] Step 7c: sending guest set-password email to ${pendingGuestEmail.email} (plan: ${shopPlan})`)
+
+      const { sendShopEmail } = await import('~/utils/server/sendShopEmail')
+
+      // Generate the one-time recovery link WITHOUT Supabase sending its own email
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'recovery',
+        email: pendingGuestEmail.email,
+        options: { redirectTo },
+      })
+      if (linkError) {
+        console.error('[BOOKING-CREATE] generateLink FAILED:', linkError.message)
+      }
+
+            // supabase-js v2 returns the link as `action_link` (snake_case);
+      // support the camelCase variant defensively for other API versions.
+      const linkProps = (linkData?.properties ?? {}) as {
+        action_link?: string
+        actionLink?: string
+      }
+      const actionLink: string | undefined = linkProps.action_link ?? linkProps.actionLink
+
+      let brandedSent = false
+      if (!linkError && actionLink) {
+        const result = await sendShopEmail(shopId, 'account.created', {
+          setPasswordUrl: actionLink,
+          customerName: pendingGuestEmail.name,
+          customer: {
+            email: pendingGuestEmail.email,
+            name: pendingGuestEmail.name,
+          },
+          bookingRef: booking.booking_ref,
+          serviceName: service.name,
+          bookingDate: date,
+          bookingTime: startTime,
+        })
+        brandedSent = result.sent === true
+        if (brandedSent) {
+          console.log('[BOOKING-CREATE] Branded set-password email SENT ✓')
+        } else {
+          console.error('[BOOKING-CREATE] Branded set-password email FAILED — reason:', result.error)
+        }
+      } else if (!linkError && !actionLink) {
+        // Defensive: dump the response shape if the API ever changes.
+        console.error(
+          '[BOOKING-CREATE] generateLink returned no action link. Properties:',
+          JSON.stringify(linkData?.properties ?? linkData ?? null)
+        )
+      }
+
+      // Fallback (best-effort): Supabase built-in email when Resend failed.
+      // May be rate-limited since generateLink consumed the recovery quota;
+      // the guest can always recover via "Forgot password?" on /login.
+      if (!brandedSent) {
+        console.log('[BOOKING-CREATE] Branded send failed — using Supabase built-in set-password email')
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          pendingGuestEmail.email,
+          { redirectTo }
+        )
+        if (resetError) {
+          console.error(
+            `[BOOKING-CREATE] Set-password email failed for ${pendingGuestEmail.email}:`,
+            resetError.message.includes('security purposes')
+              ? 'rate-limited (guest can use "Forgot password?" on /login)'
+              : resetError.message
+          )
+        }
+      }
+    } catch (guestEmailErr) {
+      console.error('[BOOKING-CREATE] Guest set-password email error:', guestEmailErr)
+    }
   }
 
   // Step 8: Return result

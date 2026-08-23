@@ -131,7 +131,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', verification.booking_id)
       .single()
 
-    // Fetch barber name
+        // Fetch barber name
     let barberName = 'Your Barber'
     if (bookingDetails?.barber_id) {
       const { data: barberUser } = await supabaseAdmin
@@ -149,11 +149,22 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    // Fetch payment method display name (payment_method_id is a raw UUID)
+    let paymentMethodName = 'Manual Payment'
+    if (verification.payment_method_id) {
+      const { data: method } = await supabaseAdmin
+        .from('payment_methods')
+        .select('name')
+        .eq('id', verification.payment_method_id)
+        .single()
+      paymentMethodName = method?.name || 'Manual Payment'
+    }
+
     await sendShopEmail(userProfile.shop_id, 'payment.verified', {
       bookingRef: booking?.booking_ref,
       bookingId: verification.booking_id,
       amount: `PHP ${Number(verification.amount).toFixed(2)}`,
-      paymentMethod: verification.payment_method_id || 'Manual',
+      paymentMethod: paymentMethodName,
       serviceName: bookingDetails?.service_name || 'Service',
       barberName,
       date: bookingDetails?.date || '',

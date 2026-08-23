@@ -93,6 +93,7 @@ export default defineNuxtConfig({
     // Server-only (never exposed to client)
     supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
     resendApiKey: process.env.RESEND_API_KEY || '',
+    resendSenderEmail: process.env.RESEND_SENDER_EMAIL || '',
     nuxtEncryptionKey: process.env.NUXT_ENCRYPTION_KEY || '',
 
     // Public (exposed to client)

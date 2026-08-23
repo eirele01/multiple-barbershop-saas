@@ -18,7 +18,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
-import { templateMap } from '~/utils/server/emailTemplates'
+import { templateMap, type ShopBranding } from '~/utils/server/emailTemplates'
 
 // ─── Email Template Types ─────────────────────────────
 
@@ -33,9 +33,29 @@ export type EmailTemplate =
   | 'loyalty.tier_upgraded'
   | 'loyalty.expiring'
   | 'welcome'
+  | 'account.created'
 
+interface EmailCustomer {
+  email?: string
+  name?: string
+}
+
+/**
+ * Input data for sendShopEmail.
+ *
+ * Known keys are used by sendShopEmail itself (recipient resolution,
+ * branding injection, customer-name normalization). All other keys are
+ * template-specific fields consumed by the individual template functions
+ * in emailTemplates.ts.
+ */
 interface EmailData {
   [key: string]: unknown
+  /** Recipient info — `customer.email` is required for delivery */
+  customer?: EmailCustomer
+  /** Optional flat customer name; derived from `customer.name` if omitted */
+  customerName?: string
+  /** Optional pre-built branding; auto-injected from the shop row otherwise */
+  branding?: ShopBranding
 }
 
 interface SendEmailResult {
@@ -103,30 +123,50 @@ export async function sendShopEmail(
       return { sent: false, error: 'shop_not_found' }
     }
 
-    // Step 2: Guard — plan must be upgraded
-    if (shop.plan !== 'upgraded') {
+            // Step 2: Guard — plan must be upgraded
+    // EXCEPTION: 'account.created' is a platform-generated account-security
+    // email (auto-created guest accounts), not a shop-purchased notification —
+    // every customer needs it to access their booking, regardless of plan.
+    const PLAN_EXEMPT_TEMPLATES: EmailTemplate[] = ['account.created']
+    if (shop.plan !== 'upgraded' && !PLAN_EXEMPT_TEMPLATES.includes(template)) {
+      console.warn(`[EMAIL] Skipped '${template}' — shop plan is '${shop.plan}' (requires 'upgraded') | shop: ${shop.name}`)
       return { sent: false, error: 'basic_plan' }
     }
 
     // Step 3: Check email toggle flags
     if (CONFIRMATION_TEMPLATES.includes(template) && !shop.email_confirmation) {
+      console.warn(`[EMAIL] Skipped '${template}' — shop has email_confirmation disabled | shop: ${shop.name}`)
       return { sent: false, error: 'confirmation_emails_disabled' }
     }
     if (REMINDER_TEMPLATES.includes(template) && !shop.email_reminder) {
+      console.warn(`[EMAIL] Skipped '${template}' — shop has email_reminder disabled | shop: ${shop.name}`)
       return { sent: false, error: 'reminder_emails_disabled' }
     }
 
-    // Step 4: Get Resend credentials from platform settings (or fallback to shop-level)
+        // Step 4: Get Resend credentials — priority chain:
+    //   1. platform_settings table (super-admin managed)
+    //   2. RESEND_API_KEY from server env (runtimeConfig)
+    //   3. legacy shop-level encrypted key
     const platform = await getPlatformEmailSettings(supabase)
 
-    let resendApiKey: string
+        let resendApiKey: string
     let senderEmail: string
     let senderName: string
+    let credentialSource: string
 
     if (platform) {
       resendApiKey = platform.resendApiKey
       senderEmail = platform.senderEmail
       senderName = platform.senderName
+      credentialSource = 'platform_settings'
+    } else if (config.resendApiKey) {
+                  // Fallback: platform-level key from .env (RESEND_API_KEY)
+      resendApiKey = config.resendApiKey
+      // Resend only allows verified domains — default to the sandbox sender
+      // until a domain is verified. Override with RESEND_SENDER_EMAIL in .env.
+      senderEmail = config.resendSenderEmail || 'onboarding@resend.dev'
+      senderName = 'Reservation PH'
+      credentialSource = '.env (RESEND_API_KEY)'
     } else {
       // Fallback: use shop-level config (legacy)
       const { data: shopConfig } = await supabase
@@ -136,6 +176,7 @@ export async function sendShopEmail(
         .single()
 
       if (!shopConfig?.resend_api_key) {
+        console.error('[EMAIL] No Resend API key found (platform_settings, env, or shop-level) for shop:', shopId)
         return { sent: false, error: 'no_api_key' }
       }
 
@@ -183,15 +224,36 @@ export async function sendShopEmail(
       shopSlug: shop.slug,
     }
 
-    const enrichedData = {
+            const enrichedData = {
       ...data,
       branding: data.branding || branding,
     }
 
-    const rendered = templateFunc(enrichedData as any)
+    // Normalize: template functions expect a flat `customerName`, but callers
+    // pass `customer: { email, name }`. Derive one from the other so greeting
+    // lines never render "Hi undefined". Falls back to 'Customer'.
+    const providedName =
+      typeof enrichedData.customerName === 'string'
+        ? enrichedData.customerName.trim()
+        : ''
+    const normalizedData = {
+      ...enrichedData,
+      customerName:
+        providedName ||
+        enrichedData.customer?.name?.trim() ||
+        'Customer',
+    }
 
-    // Step 8: Determine sender
+    // Single type boundary: the union of 10 per-template signatures cannot
+    // accept one common input type, so this cast is isolated here on purpose.
+    const rendered = templateFunc(normalizedData as any)
+
+        // Step 8: Determine sender
     const from = `"${senderName}" <${senderEmail}>`
+
+    // Diagnostic: shows exactly which key source + sender is used per send,
+    // so delivery failures can be traced to a config problem immediately.
+    console.log(`[EMAIL] Sending '${template}' | key source: ${credentialSource} | from: ${from} | to: ${recipientEmail}`)
 
     // Step 9: Send via Resend
     const { error: sendError } = await resend.emails.send({

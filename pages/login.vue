@@ -123,6 +123,47 @@ async function handleSignIn() {
   }
 }
 
+// ─── Forgot Password ─────────────────────────────────
+const supabaseClient = useSupabase()
+const showForgot = ref(false)
+const forgotEmail = ref('')
+const forgotLoading = ref(false)
+const forgotSent = ref(false)
+const forgotError = ref('')
+
+function openForgot() {
+  // Prefill from the sign-in form if the user already typed their email
+  forgotEmail.value = signInEmail.value.trim()
+  forgotSent.value = false
+  forgotError.value = ''
+  showForgot.value = true
+}
+
+async function handleForgotPassword() {
+  const email = forgotEmail.value.trim()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    forgotError.value = 'Enter a valid email address'
+    return
+  }
+
+  forgotLoading.value = true
+  forgotError.value = ''
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+    if (error) {
+      forgotError.value = error.message || 'Failed to send reset email.'
+    } else {
+      forgotSent.value = true
+    }
+  } catch {
+    forgotError.value = 'Something went wrong. Please try again.'
+  } finally {
+    forgotLoading.value = false
+  }
+}
+
 // ─── Customer Registration ───────────────────────────
 function validateRegistration(): boolean {
   let valid = true
@@ -298,21 +339,22 @@ function handleTabKeyLogin(e: KeyboardEvent) {
           </div>
         </Transition>
 
-        <form class="space-y-5 mt-auto" @submit.prevent="handleSignIn">
-          <div>
-            <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Email Address</label>
-            <input
-              v-model="signInEmail"
-              type="email"
-              required
-              autocomplete="email"
-              placeholder="you@example.com"
-              class="input-design w-full border bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] placeholder-[var(--color-silver)] focus:border-[var(--color-deep)] focus:outline-none focus:ring-1 focus:ring-[var(--color-deep)]"
-              :class="signInEmailError ? 'border-[var(--color-danger)]' : 'border-[var(--color-silver)]'"
-              @input="signInEmailError = ''"
-            />
-            <p v-if="signInEmailError" class="mt-1 text-xs text-[var(--color-danger)]">{{ signInEmailError }}</p>
-          </div>
+        <form class="space-y-5 mt-auto" @submit.prevent="showForgot ? handleForgotPassword() : handleSignIn()">
+          <template v-if="!showForgot">
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Email Address</label>
+              <input
+                v-model="signInEmail"
+                type="email"
+                required
+                autocomplete="email"
+                placeholder="you@example.com"
+                class="input-design w-full border bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] placeholder-[var(--color-silver)] focus:border-[var(--color-deep)] focus:outline-none focus:ring-1 focus:ring-[var(--color-deep)]"
+                :class="signInEmailError ? 'border-[var(--color-danger)]' : 'border-[var(--color-silver)]'"
+                @input="signInEmailError = ''"
+              />
+              <p v-if="signInEmailError" class="mt-1 text-xs text-[var(--color-danger)]">{{ signInEmailError }}</p>
+            </div>
 
           <div>
             <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Password</label>
@@ -339,17 +381,83 @@ function handleTabKeyLogin(e: KeyboardEvent) {
             <p v-if="signInPasswordError" class="mt-1 text-xs text-[var(--color-danger)]">{{ signInPasswordError }}</p>
           </div>
 
-          <button
-            type="submit"
-            :disabled="isLoading"
-            class="btn-design w-full rounded-btn bg-[var(--color-deep)] py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-titanium)] disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"
-          >
-            <span v-if="!isLoading">Sign In</span>
-            <span v-else class="flex items-center justify-center gap-2">
-              <Icon name="lucide:loader-2" class="h-4 w-4 animate-spin" />
-              Signing In...
-            </span>
-          </button>
+          <p class="-mt-2 text-right">
+              <button
+                type="button"
+                class="text-xs font-medium text-[var(--color-info)] hover:underline"
+                @click="openForgot"
+              >
+                Forgot password?
+              </button>
+            </p>
+
+            <button
+              type="submit"
+              :disabled="isLoading"
+              class="btn-design w-full rounded-btn bg-[var(--color-deep)] py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-titanium)] disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"
+            >
+              <span v-if="!isLoading">Sign In</span>
+              <span v-else class="flex items-center justify-center gap-2">
+                <Icon name="lucide:loader-2" class="h-4 w-4 animate-spin" />
+                Signing In...
+              </span>
+            </button>
+          </template>
+
+          <!-- ─── Forgot Password view ─── -->
+          <template v-else>
+            <div class="rounded-input border border-[var(--color-info)]/20 bg-[var(--color-info)]/5 p-3">
+              <p class="text-xs text-[var(--color-titanium)]">
+                Enter your account email and we'll send you a secure link to set a new password.
+              </p>
+            </div>
+
+            <div>
+              <label class="mb-1.5 block text-sm font-medium text-[var(--color-deep)]">Email Address</label>
+              <input
+                v-model="forgotEmail"
+                type="email"
+                required
+                autocomplete="email"
+                placeholder="you@example.com"
+                class="input-design w-full border bg-[var(--color-pure-white)] px-4 py-3 text-sm text-[var(--color-deep)] placeholder-[var(--color-silver)] focus:border-[var(--color-deep)] focus:outline-none focus:ring-1 focus:ring-[var(--color-deep)]"
+                :class="forgotError ? 'border-[var(--color-danger)]' : 'border-[var(--color-silver)]'"
+                @input="forgotError = ''"
+              />
+            </div>
+
+            <p v-if="forgotSent" class="flex items-start gap-2 rounded-input bg-[var(--color-success)]/5 p-3 text-xs text-[var(--color-success)]">
+              <Icon name="lucide:mail-check" class="mt-0.5 h-4 w-4 flex-shrink-0" />
+              Reset link sent! Check your inbox (and spam folder) — the link lets you set a new password.
+            </p>
+            <p v-else-if="forgotError" class="text-xs text-[var(--color-danger)]">{{ forgotError }}</p>
+
+            <button
+              type="submit"
+              :disabled="forgotLoading || forgotSent"
+              class="btn-design w-full rounded-btn bg-[var(--color-deep)] py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-titanium)] disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"
+            >
+              <span v-if="!forgotLoading && !forgotSent">Send Reset Link</span>
+              <span v-else-if="forgotLoading" class="flex items-center justify-center gap-2">
+                <Icon name="lucide:loader-2" class="h-4 w-4 animate-spin" />
+                Sending...
+              </span>
+              <span v-else class="flex items-center justify-center gap-2">
+                <Icon name="lucide:check" class="h-4 w-4" />
+                Link Sent
+              </span>
+            </button>
+
+            <p class="text-center">
+              <button
+                type="button"
+                class="text-xs font-medium text-[var(--color-info)] hover:underline"
+                @click="showForgot = false; forgotSent = false"
+              >
+                ← Back to Sign In
+              </button>
+            </p>
+          </template>
         </form>
       </div>
     </template>

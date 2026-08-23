@@ -471,8 +471,24 @@ export async function awardWelcomeBonus(
     return { success: true, points: 0, balanceAfter: await getCustomerBalance(shopId, customerId) }
   }
 
-  try {
-    const currentBalance = await getCustomerBalance(shopId, customerId)
+    try {
+    // Pre-check: welcome bonus is strictly one-per-customer-per-shop
+    // (enforced by idx_loyalty_points_welcome_bonus_unique). Skipping here
+    // avoids a guaranteed constraint violation on repeat bookings — the
+    // unique index still protects against concurrent-booking races.
+    const { data: existingBonus } = await getAdminClient()
+      .from('loyalty_points')
+      .select('id')
+      .eq('shop_id', shopId)
+      .eq('customer_id', customerId)
+      .eq('type', 'welcome_bonus')
+      .maybeSingle()
+
+    if (existingBonus) {
+      return { success: true, points: 0, balanceAfter: await getCustomerBalance(shopId, customerId) }
+    }
+
+        const currentBalance = await getCustomerBalance(shopId, customerId)
 
     // Calculate expiry date for welcome bonus
     let expiresAt: string | null = null

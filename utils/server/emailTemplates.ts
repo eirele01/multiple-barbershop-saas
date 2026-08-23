@@ -32,7 +32,7 @@ function safeColor(color: string): string {
 
 // ─── Shared Types ─────────────────────────────────────
 
-interface ShopBranding {
+export interface ShopBranding {
   shopName: string
   logoUrl: string | null
   primaryColor: string
@@ -90,7 +90,7 @@ function baseLayout(branding: ShopBranding, contentHtml: string): string {
         <!-- Footer -->
         <tr>
           <td style="padding:20px 24px;border-top:1px solid #e5e7eb;background-color:#fafafa;" bgcolor="#fafafa">
-            <p style="margin:0 0 4px 0;font-size:12px;color:#9ca3af;text-align:center;">Powered by BarberShop SaaS</p>
+            <p style="margin:0 0 4px 0;font-size:12px;color:#9ca3af;text-align:center;">Powered by Reservation SaaS</p>
             ${addressLine}
             ${mapsLink ? `<p style="margin:4px 0 0 0;font-size:12px;text-align:center;">${mapsLink}</p>` : ''}
           </td>
@@ -568,6 +568,69 @@ export function welcomeEmail(data: WelcomeEmailData): EmailResult {
   }
 }
 
+// ─── Account Created (guest booking set-password) ─────
+
+interface AccountCreatedData {
+  branding: ShopBranding
+  customerName: string
+  setPasswordUrl: string
+  customer: { email: string; name: string }
+  bookingRef?: string
+  serviceName?: string
+  bookingDate?: string
+  bookingTime?: string
+}
+
+function accountCreated(data: AccountCreatedData): EmailResult {
+  const b = data.branding
+
+  const bookingRows = [
+    data.bookingRef ? detailRow('Booking Ref', `#${data.bookingRef}`) : '',
+    data.serviceName ? detailRow('Service', data.serviceName) : '',
+    (data.bookingDate || data.bookingTime)
+      ? detailRow('When', [data.bookingDate, data.bookingTime].filter(Boolean).join(' at '))
+      : '',
+  ].join('')
+
+  const bookingHtml = bookingRows
+    ? `<p style="margin:16px 0 8px 0;font-size:14px;font-weight:600;color:#374151;">Your Booking:</p>
+       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:16px;">${bookingRows}</table>`
+    : ''
+
+  const content = `
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
+    <p style="margin:0 0 20px 0;font-size:20px;font-weight:700;color:${safeColor(b.primaryColor)};">Your account is ready!</p>
+
+    <p style="margin:0 0 16px 0;font-size:14px;line-height:22px;color:#374151;">
+      An account was automatically created for you when you booked.
+      Tap the button below to set your own password so you can log in anytime to
+      track appointments, earn loyalty points, and manage your bookings.
+    </p>
+
+    ${bookingHtml}
+
+    ${button('Set My Password', data.setPasswordUrl, b.primaryColor)}
+
+    <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;text-align:center;">Button not working?
+      <a href="${htmlEscape(data.setPasswordUrl)}" style="color:${safeColor(b.primaryColor)};font-weight:600;">Click here</a></p>
+    <p style="margin:0 0 24px 0;font-size:11px;color:#9ca3af;line-height:16px;word-break:break-all;background-color:#f4f4f5;border-radius:8px;padding:10px 12px;">${htmlEscape(data.setPasswordUrl)}</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fecaca;background-color:#fef2f2;border-radius:8px;">
+      <tr><td style="padding:12px 16px;">
+        <p style="margin:0;font-size:12px;line-height:18px;color:#991b1b;">
+          🔒 This link can only be used once and expires for your security.
+          If you didn't book this appointment, you can safely ignore this email.
+        </p>
+      </td></tr>
+    </table>
+  `
+
+  return {
+    subject: `Set your password — ${htmlEscape(b.shopName)}`,
+    html: baseLayout(b, content),
+  }
+}
+
 // ═══════════════════════════════════════════════════════
 // TEMPLATE LOOKUP — Map template name to function
 // ═══════════════════════════════════════════════════════
@@ -582,12 +645,14 @@ export type EmailTemplateFunc =
   | typeof loyaltyTierUpgraded
   | typeof pointsExpiringSoon
   | typeof welcomeEmail
+  | typeof accountCreated
 
 /**
  * Map of template names to their render functions.
  * Used by sendShopEmail() to select the correct template.
  */
 export const templateMap: Record<string, EmailTemplateFunc> = {
+  'account.created': accountCreated,
   'booking.confirmed': bookingConfirmation,
   'booking.reminder': appointmentReminder,
   'payment.verified': paymentVerified,

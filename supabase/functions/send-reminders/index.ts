@@ -114,7 +114,7 @@ function appointmentReminderHtml(data: {
         </tr>
         <tr>
           <td style="padding:20px 24px;border-top:1px solid #e5e7eb;background-color:#fafafa;" bgcolor="#fafafa">
-            <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">Powered by BarberShop SaaS</p>
+            <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">Powered by Reservation SaaS</p>
           </td>
         </tr>
       </table>
