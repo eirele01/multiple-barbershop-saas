@@ -25,6 +25,3 @@ Desktop.ini
 
 # Build artifacts
 *.tsbuildinfo
-
-#AI Agent
-.qwen

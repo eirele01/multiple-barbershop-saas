@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(ui.nuxt.com)",
+      "WebFetch(github.com)",
+      "Bash(npx *)",
+      "Bash(mkdir *)",
+      "Bash(invoke-webrequest *)",
+      "Bash(dir *)",
+      "Bash(get-childitem *)",
+      "Bash(foreach-object *)",
+      "Bash(xcopy *)",
+      "Bash(select-object *)",
+      "Bash(.count)",
+      "WebFetch(docs.paymongo.com)",
+      "Bash(get-content *)",
+      "Bash(select-string *)"
+    ]
+  },
+  "$version": 4
+}
