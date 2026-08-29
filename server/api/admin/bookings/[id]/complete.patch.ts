@@ -99,7 +99,10 @@ export default defineEventHandler(async (event) => {
     .from('bookings')
     .update({
       status: 'completed',
-      payment_status: booking.payment_status === 'verified' ? 'verified' : 'paid',
+      // Normalize to canonical 'paid'; keep non-paid states (e.g. unpaid) untouched
+      payment_status: (booking.payment_status === 'paid' || booking.payment_status === 'verified')
+        ? 'paid'
+        : booking.payment_status,
       paid_at: new Date().toISOString(),
     })
     .eq('id', bookingId)

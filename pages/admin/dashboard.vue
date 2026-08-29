@@ -4,15 +4,28 @@
  * Shows: Onboarding banner (for new shops), today's bookings, revenue, pending payments, quick stats
  * As described in Section 8.5
  */
+
+/** Shape of GET /api/admin/dashboard response (mirrors utils/server/dashboard.ts) */
+interface DashboardStats {
+  todayBookings: number
+  pendingPayments: number
+  todayRevenue: number
+  activeStaff: number
+  servicesCount: number
+  paymentsConfigured: boolean
+  brandingCustomized: boolean
+}
+
 definePageMeta({
   layout: 'admin',
-  middleware: 'admin',
+  middleware: ['auth', 'admin'],
 })
 
 const authStore = useAuthStore()
 const shopStore = useShopStore()
 const route = useRoute()
 const toast = useToast()
+const { authFetch } = useAuthFetch()
 
 // Onboarding state
 const showOnboardingBanner = ref(false)
@@ -20,57 +33,33 @@ const isOnboardingDismissed = ref(false)
 
 // Dashboard loading state
 const isLoading = ref(true)
-const todayBookings = ref(0)
-const pendingPayments = ref(0)
-const todayRevenue = ref(0)
-const activeStaff = ref(0)
+const stats = ref<DashboardStats>({
+  todayBookings: 0,
+  pendingPayments: 0,
+  todayRevenue: 0,
+  activeStaff: 0,
+  servicesCount: 0,
+  paymentsConfigured: false,
+  brandingCustomized: false,
+})
 
 // Fetch dashboard stats
+/**
+ * Fetch dashboard stats from the server endpoint (single auth-scoped API call).
+ */
 async function fetchDashboardData() {
   isLoading.value = true
   try {
-    const supabase = useSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-    if (!token || !authStore.shopId) return
-
-    const shopId = authStore.shopId
-    // Use local date (not toISOString which returns UTC — wrong in UTC+8)
-    const now = new Date()
-    const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`
-
-    // Today's bookings count
-    const { count: bookingCount } = await supabase
-      .from('bookings')
-      .select('*', { count: 'exact', head: true })
-      .eq('shop_id', shopId)
-      .eq('date', today)
-    todayBookings.value = bookingCount || 0
-
-    // Pending payments count
-    const { count: paymentCount } = await supabase
-      .from('bookings')
-      .select('*', { count: 'exact', head: true })
-      .eq('shop_id', shopId)
-      .eq('payment_status', 'pending')
-    pendingPayments.value = paymentCount || 0
-
-    // Today's revenue (sum of completed payments)
-    const { data: revenueData } = await supabase
-      .from('bookings')
-      .select('payment_amount')
-      .eq('shop_id', shopId)
-      .eq('date', today)
-      .eq('payment_status', 'paid')
-    todayRevenue.value = (revenueData || []).reduce((sum, b) => sum + (b.payment_amount || 0), 0)
-
-    // Active staff count
-    const { count: staffCount } = await supabase
-      .from('barbers')
-      .select('*', { count: 'exact', head: true })
-      .eq('shop_id', shopId)
-      .eq('is_active', true)
-    activeStaff.value = staffCount || 0
+    const response = await authFetch('/api/admin/dashboard') as DashboardStats
+    stats.value = {
+      todayBookings: response.todayBookings || 0,
+      pendingPayments: response.pendingPayments || 0,
+      todayRevenue: response.todayRevenue || 0,
+      activeStaff: response.activeStaff || 0,
+      servicesCount: response.servicesCount || 0,
+      paymentsConfigured: !!response.paymentsConfigured,
+      brandingCustomized: !!response.brandingCustomized,
+    }
   } catch (error) {
     toast.error('Could not load dashboard stats. Please refresh the page.')
     console.error('Error fetching dashboard data:', error) // logged to console for debugging
@@ -78,6 +67,71 @@ async function fetchDashboardData() {
     isLoading.value = false
   }
 }
+
+// ─── Stat aliases (template compatibility) ──────────
+const todayBookings = computed(() => stats.value.todayBookings)
+const pendingPayments = computed(() => stats.value.pendingPayments)
+const todayRevenue = computed(() => stats.value.todayRevenue)
+const activeStaff = computed(() => stats.value.activeStaff)
+
+// ─── Today's Bookings list (left column card) ───────
+interface TodayBooking {
+  id: string
+  booking_ref: string
+  service_name: string
+  start_time: string
+  end_time: string
+  status: string
+  customerName?: string | null
+  barberName?: string
+}
+const todayBookingsList = ref<TodayBooking[]>([])
+const todayBookingsTotal = ref(0)
+
+const { formatTime } = useFormat()
+
+/** Fetch today's schedule via the existing bookings list endpoint (reused, no duplication). */
+async function fetchTodayBookings() {
+  try {
+    // Local date (matches the server-side 'today' logic — not UTC)
+    const now = new Date()
+    const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`
+    const response = await authFetch(`/api/admin/bookings?dateFrom=${today}&dateTo=${today}&limit=5`) as { data: TodayBooking[]; total: number }
+    // Endpoint orders start_time DESC — reverse for a chronological schedule view
+    todayBookingsList.value = (response.data || []).slice().reverse()
+    todayBookingsTotal.value = response.total || 0
+  } catch (error) {
+    console.error('Error fetching today\'s bookings:', error) // non-fatal — stat card still shows the count
+  }
+}
+
+/** Booking status → badge color classes (consistent with logs page convention). */
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case 'confirmed': return 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
+    case 'in_progress': return 'bg-purple-100 text-purple-700'
+    case 'completed': return 'bg-[var(--color-success)]/10 text-[var(--color-success)]'
+    case 'cancelled': return 'bg-[var(--color-danger)]/10 text-[var(--color-danger)]'
+    case 'no_show': return 'bg-[var(--color-silver)]/20 text-[var(--color-titanium)]'
+    default: return 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]' // pending
+  }
+}
+
+// ─── Getting Started checklist (dynamic completion state) ──
+interface ChecklistItem {
+  label: string
+  done: boolean
+  to: string
+}
+
+const checklistItems = computed<ChecklistItem[]>(() => [
+  { label: 'Add your first service', done: stats.value.servicesCount > 0, to: '/admin/services' },
+  { label: 'Add your team', done: stats.value.activeStaff > 0, to: '/admin/staff' },
+  { label: 'Set up payments', done: stats.value.paymentsConfigured, to: '/admin/payments/methods' },
+  { label: 'Customize your page', done: stats.value.brandingCustomized, to: '/admin/shop-profile' },
+])
+const checklistDoneCount = computed(() => checklistItems.value.filter(i => i.done).length)
+const checklistAllDone = computed(() => checklistDoneCount.value === checklistItems.value.length)
 
 // Check for onboarding query param from registration
 onMounted(async () => {
@@ -90,8 +144,8 @@ onMounted(async () => {
     showOnboardingBanner.value = true
   }
 
-  // Fetch dashboard data
-  await fetchDashboardData()
+  // Fetch dashboard data + today's schedule in parallel
+  await Promise.all([fetchDashboardData(), fetchTodayBookings()])
 })
 
 function dismissOnboarding() {
@@ -243,8 +297,20 @@ const displayOnboarding = computed(() => showOnboardingBanner.value && !isOnboar
             </NuxtLink>
           </div>
 
+          <!-- Loading skeleton -->
+          <div v-if="isLoading" class="divide-y divide-[var(--color-silver)]/10">
+            <div v-for="n in 3" :key="n" class="flex items-center gap-4 py-3">
+              <div class="h-8 w-20 animate-pulse rounded bg-[var(--color-silver)]/10" />
+              <div class="flex-1">
+                <div class="h-4 w-32 animate-pulse rounded bg-[var(--color-silver)]/10" />
+                <div class="mt-1.5 h-3 w-24 animate-pulse rounded bg-[var(--color-silver)]/10" />
+              </div>
+              <div class="h-6 w-20 animate-pulse rounded-full bg-[var(--color-silver)]/10" />
+            </div>
+          </div>
+
           <!-- Empty state -->
-          <div class="py-12 text-center">
+          <div v-else-if="todayBookingsList.length === 0" class="py-12 text-center">
             <Icon name="lucide:calendar-x" class="mx-auto h-12 w-12 text-[var(--color-silver)]" />
             <p class="mt-3 text-sm text-[var(--color-titanium)]">
               No bookings for today yet.
@@ -253,8 +319,37 @@ const displayOnboarding = computed(() => showOnboardingBanner.value && !isOnboar
               to="/admin/services"
               class="btn-design mt-4 inline-block rounded-btn bg-[var(--color-deep)] px-4 py-2 text-sm font-medium text-white"
             >
-              Add Your First Service
+              Manage Services
             </NuxtLink>
+          </div>
+
+          <!-- Today's bookings list -->
+          <div v-else class="divide-y divide-[var(--color-silver)]/10">
+            <div
+              v-for="booking in todayBookingsList"
+              :key="booking.id"
+              class="flex items-center gap-4 py-3"
+            >
+              <!-- Time block -->
+              <div class="w-24 flex-shrink-0 text-center">
+                <p class="text-sm font-semibold text-[var(--color-deep)]">{{ formatTime(booking.start_time) }}</p>
+                <p class="text-xs text-[var(--color-titanium)]">{{ formatTime(booking.end_time) }}</p>
+              </div>
+              <!-- Service + who -->
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium text-[var(--color-deep)]">{{ booking.service_name }}</p>
+                <p class="truncate text-xs text-[var(--color-titanium)]">
+                  {{ booking.customerName || 'Guest' }} · {{ booking.barberName || 'Unassigned' }}
+                </p>
+              </div>
+              <!-- Status badge -->
+              <span class="badge-pill flex-shrink-0 text-xs font-medium" :class="statusBadgeClass(booking.status)">
+                {{ booking.status.replace('_', ' ') }}
+              </span>
+            </div>
+            <p v-if="todayBookingsTotal > todayBookingsList.length" class="pt-3 text-center text-xs text-[var(--color-titanium)]">
+              + {{ todayBookingsTotal - todayBookingsList.length }} more today
+            </p>
           </div>
         </div>
       </div>
@@ -301,47 +396,65 @@ const displayOnboarding = computed(() => showOnboardingBanner.value && !isOnboar
           <div class="mb-4 flex items-center justify-between">
             <h3 class="text-[var(--color-deep)]">Payment Queue</h3>
             <span class="badge-pill bg-[var(--color-warning)]/10 text-xs text-[var(--color-warning)]">
-              0 pending
+              {{ pendingPayments }} pending
             </span>
           </div>
-          <p class="text-sm text-[var(--color-titanium)]">
+          <p v-if="pendingPayments > 0" class="text-sm text-[var(--color-titanium)]">
+            You have {{ pendingPayments }} payment{{ pendingPayments === 1 ? '' : 's' }} awaiting verification.
+          </p>
+          <p v-else class="text-sm text-[var(--color-titanium)]">
             No pending payment verifications.
           </p>
+          <NuxtLink
+            v-if="pendingPayments > 0"
+            to="/admin/payments/verification"
+            class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-info)] hover:underline"
+          >
+            Review payments
+            <Icon name="lucide:arrow-right" class="h-4 w-4" />
+          </NuxtLink>
         </div>
       </div>
     </div>
 
-    <!-- Getting Started Checklist -->
+    <!-- Getting Started Checklist (dynamic — reflects actual setup state) -->
     <div class="mt-8 card-design p-6">
-      <h3 class="mb-4 text-[var(--color-deep)]">
-        <Icon name="lucide:rocket" class="mr-2 inline-block h-5 w-5" />
-        Getting Started
-      </h3>
+      <div class="mb-4 flex items-center justify-between">
+        <h3 class="text-[var(--color-deep)]">
+          <Icon name="lucide:rocket" class="mr-2 inline-block h-5 w-5" />
+          Getting Started
+        </h3>
+        <span
+          class="badge-pill text-xs font-medium"
+          :class="checklistAllDone ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]' : 'bg-[var(--color-silver)]/20 text-[var(--color-titanium)]'"
+        >
+          {{ checklistAllDone ? 'All set! 🎉' : `${checklistDoneCount}/${checklistItems.length} complete` }}
+        </span>
+      </div>
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="flex items-center gap-3 rounded-input bg-[var(--color-white)] p-3">
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-silver)]/30">
-            <span class="text-xs font-bold text-[var(--color-titanium)]">1</span>
+        <NuxtLink
+          v-for="(item, i) in checklistItems"
+          :key="item.label"
+          :to="item.to"
+          class="flex items-center gap-3 rounded-input p-3 transition-colors"
+          :class="item.done
+            ? 'bg-[var(--color-success)]/5 hover:bg-[var(--color-success)]/10'
+            : 'bg-[var(--color-white)] hover:bg-[var(--color-silver)]/10'"
+        >
+          <div
+            class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
+            :class="item.done ? 'bg-[var(--color-success)]' : 'bg-[var(--color-silver)]/30'"
+          >
+            <Icon v-if="item.done" name="lucide:check" class="h-4 w-4 text-white" />
+            <span v-else class="text-xs font-bold text-[var(--color-titanium)]">{{ i + 1 }}</span>
           </div>
-          <span class="text-sm text-[var(--color-titanium)]">Add your first service</span>
-        </div>
-        <div class="flex items-center gap-3 rounded-input bg-[var(--color-white)] p-3">
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-silver)]/30">
-            <span class="text-xs font-bold text-[var(--color-titanium)]">2</span>
-          </div>
-          <span class="text-sm text-[var(--color-titanium)]">Add your team</span>
-        </div>
-        <div class="flex items-center gap-3 rounded-input bg-[var(--color-white)] p-3">
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-silver)]/30">
-            <span class="text-xs font-bold text-[var(--color-titanium)]">3</span>
-          </div>
-          <span class="text-sm text-[var(--color-titanium)]">Set up payments</span>
-        </div>
-        <div class="flex items-center gap-3 rounded-input bg-[var(--color-white)] p-3">
-          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-silver)]/30">
-            <span class="text-xs font-bold text-[var(--color-titanium)]">4</span>
-          </div>
-          <span class="text-sm text-[var(--color-titanium)]">Customize your page</span>
-        </div>
+          <span
+            class="text-sm"
+            :class="item.done ? 'text-[var(--color-deep)] line-through opacity-70' : 'text-[var(--color-titanium)]'"
+          >
+            {{ item.label }}
+          </span>
+        </NuxtLink>
       </div>
     </div>
   </div>

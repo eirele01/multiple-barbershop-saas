@@ -7,6 +7,14 @@
  *          topShopsByRevenue, planGrowthOverTime, keyMetrics
  */
 import { useSupabaseAdmin } from '~/server/utils/supabase'
+
+/**
+ * Revenue-qualifying payment statuses.
+ * 'paid' is the canonical value (PayMongo webhook + manual verifications);
+ * 'verified' is the legacy value from older manual verifications.
+ */
+const PAID_STATUSES = new Set(['paid', 'verified'])
+
 export default defineEventHandler(async (event) => {
   const supabase = useSupabaseAdmin()
 
@@ -82,11 +90,11 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // ── revenueOverTime: sum of verified payments grouped by date ──
+    // ── revenueOverTime: sum of paid payments grouped by date ──
     const revenueByDate = new Map<string, number>()
     if (bookings) {
       for (const b of bookings) {
-        if (b.payment_status === 'verified') {
+        if (PAID_STATUSES.has(b.payment_status)) {
           const date = b.created_at.slice(0, 10)
           revenueByDate.set(date, (revenueByDate.get(date) || 0) + (Number(b.payment_amount) || 0))
         }
@@ -121,11 +129,11 @@ export default defineEventHandler(async (event) => {
       .sort((a, b) => b.bookingCount - a.bookingCount)
       .slice(0, 10)
 
-    // ── topShopsByRevenue: top 10 shops by verified payment sum ──
+    // ── topShopsByRevenue: top 10 shops by paid payment sum ──
     const shopRevenue = new Map<string, number>()
     if (bookings) {
       for (const b of bookings) {
-        if (b.shop_id && b.payment_status === 'verified') {
+        if (b.shop_id && PAID_STATUSES.has(b.payment_status)) {
           shopRevenue.set(b.shop_id, (shopRevenue.get(b.shop_id) || 0) + (Number(b.payment_amount) || 0))
         }
       }
@@ -173,7 +181,7 @@ export default defineEventHandler(async (event) => {
     // ── keyMetrics ──
     const totalBookings = bookings?.length || 0
     const totalRevenue = bookings
-      ?.filter(b => b.payment_status === 'verified')
+      ?.filter(b => PAID_STATUSES.has(b.payment_status))
       .reduce((sum, b) => sum + (Number(b.payment_amount) || 0), 0) || 0
 
     const totalShops = allShops?.length || 0

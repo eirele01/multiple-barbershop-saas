@@ -631,6 +631,61 @@ function accountCreated(data: AccountCreatedData): EmailResult {
   }
 }
 
+// ─── Staff Invited (team member set-password invite) ─────
+
+interface StaffInvitedData {
+  branding: ShopBranding
+  customerName: string
+  setPasswordUrl: string
+  staffRole?: string
+  staffEmail?: string
+}
+
+function staffInvited(data: StaffInvitedData): EmailResult {
+  const b = data.branding
+  const roleLabel = (data.staffRole || 'team member')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+
+  const content = `
+    <p style="margin:0 0 6px 0;font-size:16px;color:#1f2937;">Hi ${htmlEscape(data.customerName)},</p>
+    <p style="margin:0 0 20px 0;font-size:20px;font-weight:700;color:${safeColor(b.primaryColor)};">Welcome to the team! 🎉</p>
+
+    <p style="margin:0 0 16px 0;font-size:14px;line-height:22px;color:#374151;">
+      You've been added as a <strong>${htmlEscape(roleLabel)}</strong> at
+      <strong>${htmlEscape(b.shopName)}</strong> on Reservation PH.
+      Tap the button below to set your own password and activate your account.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:24px;">
+      ${detailRow('Name', data.customerName)}
+      ${detailRow('Role', roleLabel)}
+      ${data.staffEmail ? detailRow('Email', data.staffEmail) : ''}
+      ${detailRow('Shop', b.shopName)}
+    </table>
+
+    ${button('Set My Password', data.setPasswordUrl, b.primaryColor)}
+
+    <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;text-align:center;">Button not working?
+      <a href="${htmlEscape(data.setPasswordUrl)}" style="color:${safeColor(b.primaryColor)};font-weight:600;">Click here</a></p>
+    <p style="margin:0 0 24px 0;font-size:11px;color:#9ca3af;line-height:16px;word-break:break-all;background-color:#f4f4f5;border-radius:8px;padding:10px 12px;">${htmlEscape(data.setPasswordUrl)}</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #fecaca;background-color:#fef2f2;border-radius:8px;">
+      <tr><td style="padding:12px 16px;">
+        <p style="margin:0;font-size:12px;line-height:18px;color:#991b1b;">
+          🔒 This link can only be used once and expires for your security.
+          If you weren't expecting this invite, you can safely ignore this email.
+        </p>
+      </td></tr>
+    </table>
+  `
+
+  return {
+    subject: `Welcome to ${htmlEscape(b.shopName)} — set your password`,
+    html: baseLayout(b, content),
+  }
+}
+
 // ═══════════════════════════════════════════════════════
 // TEMPLATE LOOKUP — Map template name to function
 // ═══════════════════════════════════════════════════════
@@ -646,6 +701,7 @@ export type EmailTemplateFunc =
   | typeof pointsExpiringSoon
   | typeof welcomeEmail
   | typeof accountCreated
+  | typeof staffInvited
 
 /**
  * Map of template names to their render functions.
@@ -653,6 +709,7 @@ export type EmailTemplateFunc =
  */
 export const templateMap: Record<string, EmailTemplateFunc> = {
   'account.created': accountCreated,
+  'staff.invited': staffInvited,
   'booking.confirmed': bookingConfirmation,
   'booking.reminder': appointmentReminder,
   'payment.verified': paymentVerified,

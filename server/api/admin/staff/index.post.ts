@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { TIER_LIMITS } from '~/constants/tierLimits'
 import { SHOP_STAFF_ROLES } from '~/constants/roles'
+import { sendShopEmail } from '~/utils/server/sendShopEmail'
 
 const createStaffSchema = z.object({
   display_name: z.string().min(1, 'Full name is required').max(200),
@@ -219,6 +220,51 @@ export default defineEventHandler(async (event) => {
         }
       }
     }
+  }
+
+    // ─── Send invite email with password setup link ──────────────
+  // After the user, profile, and (optionally) barber records are committed,
+  // generate a recovery-based password-setup link and email the new staff member.
+  // This is fire-and-forget: a failure must NOT roll back the account creation.
+  try {
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin
+      .generateLink({
+        type: 'recovery',
+        email: email,
+        options: {
+          redirectTo: `${config.public.siteUrl}/auth/reset-password`,
+        },
+      })
+
+    if (linkError) {
+      console.error('[STAFF-CREATE] generateLink FAILED:', linkError.message)
+    }
+
+    // supabase-js v2 returns the link as `action_link` (snake_case);
+    // support the camelCase variant defensively for other API versions.
+    const linkProps = (linkData?.properties ?? {}) as {
+      action_link?: string
+      actionLink?: string
+    }
+    const setPasswordUrl: string | undefined = linkProps.action_link ?? linkProps.actionLink
+
+    if (!linkError && setPasswordUrl) {
+      sendShopEmail(shopId, 'staff.invited', {
+        customerEmail: email,
+        customerName: display_name,
+        customer: { email: email, name: display_name },
+        staffRole: role,
+        staffEmail: email,
+        setPasswordUrl: setPasswordUrl,
+      }).catch((err: unknown) => {
+        console.error('[STAFF-CREATE] Invite email failed:', err)
+      })
+    } else if (!linkError && !setPasswordUrl) {
+      console.error('[STAFF-CREATE] generateLink returned no recovery URL. linkData:',
+        JSON.stringify(linkData))
+    }
+  } catch (inviteError: unknown) {
+    console.error('[STAFF-CREATE] Invite link generation failed:', inviteError)
   }
 
   // ─── Activity log ───────────────────────────────────

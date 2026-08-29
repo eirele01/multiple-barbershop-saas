@@ -1,16 +1,16 @@
 <script setup lang="ts">
 /**
- * /admin/bookings — Admin Bookings List
+ * /admin/bookings — Shop Bookings List
  *
- * Shows all bookings for the shop with filters:
- * - Date range (from / to)
- * - Status filter
- * - Barber filter
+ * Role-aware bookings page:
+ * - Admin/Manager/Cashier: See ALL shop bookings, can filter by barber
+ * - Barber: See only their own bookings (barber filter hidden)
  *
+ * Filters: date range (from / to), status, barber (non-barber roles only)
  * Table columns: ref, customer, service, barber, date/time, status, payment, [View]
  * Pagination: 20 per page
  *
- * Admin-only access.
+ * Access: admin, manager, cashier, barber roles (via 'admin' middleware).
  */
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
@@ -41,6 +41,10 @@ const filterDateTo = ref('')
 // Barber options for filter
 const barbers = ref<any[]>([])
 
+// Current user's barber ID (for role-based filtering)
+const currentBarberId = ref<string | null>(null)
+const isBarberRole = ref(false)
+
 // ─── Fetch Bookings ────────────────────────────────
 async function fetchBookings() {
   isLoading.value = true
@@ -65,12 +69,19 @@ async function fetchBookings() {
       .order('date', { ascending: false })
       .order('start_time', { ascending: false })
 
-    // Apply filters
+    // If user is a barber, only show their own bookings
+    if (isBarberRole.value && currentBarberId.value) {
+      query = query.eq('barber_id', currentBarberId.value)
+    } else {
+      // Apply barber filter dropdown (admin/manager only)
+      if (filterBarberId.value) {
+        query = query.eq('barber_id', filterBarberId.value)
+      }
+    }
+
+    // Apply other filters
     if (filterStatus.value) {
       query = query.eq('status', filterStatus.value)
-    }
-    if (filterBarberId.value) {
-      query = query.eq('barber_id', filterBarberId.value)
     }
     if (filterDateFrom.value) {
       query = query.gte('date', filterDateFrom.value)
@@ -182,6 +193,36 @@ async function fetchBookings() {
   }
 }
 
+// ─── Fetch Current User's Barber ID ────────────────
+async function fetchCurrentBarberId() {
+  if (authStore.role !== 'barber') {
+    isBarberRole.value = false
+    currentBarberId.value = null
+    return
+  }
+
+  isBarberRole.value = true
+  try {
+    const supabase = useSupabase()
+    const userId = authStore.user?.id
+    if (!userId) return
+
+    const { data, error } = await supabase
+      .from('barbers')
+      .select('id')
+      .eq('user_id', userId)
+      .single()
+
+    if (error) {
+      console.error('[BOOKINGS] Failed to fetch barber record:', error)
+      return
+    }
+    currentBarberId.value = data?.id || null
+  } catch (err) {
+    console.error('[BOOKINGS] Error fetching barber ID:', err)
+  }
+}
+
 // ─── Fetch Barbers for Filter ──────────────────────
 async function fetchBarbers() {
   try {
@@ -246,9 +287,12 @@ const statusOptions = [
   { value: 'no_show', label: 'No Show' },
 ]
 
-onMounted(() => {
+onMounted(async () => {
+  await fetchCurrentBarberId()
   fetchBookings()
-  fetchBarbers()
+  if (!isBarberRole.value) {
+    fetchBarbers()
+  }
 })
 </script>
 
@@ -291,8 +335,8 @@ onMounted(() => {
             <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
-        <!-- Barber -->
-        <div>
+        <!-- Barber (hidden for barber role — they only see their own bookings) -->
+        <div v-if="!isBarberRole">
           <label class="mb-1 block text-xs font-medium text-[var(--color-titanium)]">Barber</label>
           <select
             v-model="filterBarberId"

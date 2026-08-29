@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
   // Fetch all users belonging to this shop (staff roles only)
   const { data: shopUsers, error: usersError } = await supabaseAdmin
     .from('users')
-    .select('id, email, display_name, phone_number, photo_url, role, is_active, created_at')
+    .select('id, email, display_name, phone_number, photo_url, role, is_active, last_login_at, created_at')
     .eq('shop_id', shopId)
     .in('role', SHOP_STAFF_ROLES)
     .order('created_at', { ascending: true })
@@ -113,6 +113,7 @@ export default defineEventHandler(async (event) => {
       photo_url: u.photo_url,
       role: u.role,
       is_active: u.is_active,
+      last_login_at: u.last_login_at,
       // Barber-specific fields
       barber_id: barber?.id || null,
       bio: barber?.bio || null,

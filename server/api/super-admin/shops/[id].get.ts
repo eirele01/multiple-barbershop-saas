@@ -61,12 +61,13 @@ export default defineEventHandler(async (event) => {
       .select('*', { count: 'exact', head: true })
       .eq('shop_id', shopId)
 
-    // Revenue (sum of verified payments)
+    // Revenue (sum of paid payments) — 'paid' is canonical (PayMongo + new
+    // verifications); 'verified' is the legacy value from older manual verifications
     const { data: revenueData } = await supabase
       .from('bookings')
       .select('payment_amount')
       .eq('shop_id', shopId)
-      .eq('payment_status', 'verified')
+      .in('payment_status', ['paid', 'verified'])
 
     const revenue = revenueData?.reduce((sum, b) => sum + (Number(b.payment_amount) || 0), 0) || 0
 

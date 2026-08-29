@@ -90,7 +90,7 @@ export default defineEventHandler(async (event) => {
   const { error: updateBookingError } = await supabaseAdmin
     .from('bookings')
     .update({
-      payment_status: 'verified',
+      payment_status: 'paid', // canonical value (matches PayMongo webhook + flow doc); was 'verified'
       status: 'confirmed',
       verified_by: user.id,
       verified_at: now,

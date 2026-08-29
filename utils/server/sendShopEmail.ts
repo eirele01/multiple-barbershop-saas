@@ -34,6 +34,7 @@ export type EmailTemplate =
   | 'loyalty.expiring'
   | 'welcome'
   | 'account.created'
+  | 'staff.invited'
 
 interface EmailCustomer {
   email?: string
@@ -127,7 +128,9 @@ export async function sendShopEmail(
     // EXCEPTION: 'account.created' is a platform-generated account-security
     // email (auto-created guest accounts), not a shop-purchased notification —
     // every customer needs it to access their booking, regardless of plan.
-    const PLAN_EXEMPT_TEMPLATES: EmailTemplate[] = ['account.created']
+    // 'staff.invited' is exempt for the same reason: staff can't log in
+    // without their set-password invite, on any plan.
+    const PLAN_EXEMPT_TEMPLATES: EmailTemplate[] = ['account.created', 'staff.invited']
     if (shop.plan !== 'upgraded' && !PLAN_EXEMPT_TEMPLATES.includes(template)) {
       console.warn(`[EMAIL] Skipped '${template}' — shop plan is '${shop.plan}' (requires 'upgraded') | shop: ${shop.name}`)
       return { sent: false, error: 'basic_plan' }

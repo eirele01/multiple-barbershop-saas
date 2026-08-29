@@ -38,6 +38,9 @@ const currentDate = ref(new Date())
 const filterBarberId = ref('')
 const filterStatus = ref('')
 
+// Barber role tracking
+const isBarberRole = ref(false)
+
 // Status options
 const statusOptions = [
   { value: '', label: 'All Statuses' },
@@ -257,15 +260,55 @@ async function fetchBarbers() {
   }
 }
 
+// ─── Fetch Current User's Barber ID ────────────────
+async function fetchCurrentBarberId() {
+  if (authStore.role !== 'barber') {
+    isBarberRole.value = false
+    return
+  }
+
+  isBarberRole.value = true
+  try {
+    const supabase = useSupabase()
+    const userId = authStore.user?.id
+    if (!userId) return
+
+    const { data, error } = await supabase
+      .from('barbers')
+      .select('id')
+      .eq('user_id', userId)
+      .single()
+
+    if (error) {
+      console.error('[CALENDAR] Failed to fetch barber record:', error)
+      return
+    }
+    filterBarberId.value = data?.id || ''
+  } catch (err) {
+    console.error('[CALENDAR] Error fetching barber ID:', err)
+  }
+}
+
 // ─── Booking helpers ───────────────────────────────
 function getBookingsForDay(dateStr: string) {
   return bookings.value.filter(b => b.date === dateStr)
 }
 
 function getBookingsForSlot(dateStr: string, time: string) {
-  // start_time from PostgreSQL is "HH:MM:SS" but our time slots are "HH:MM",
-  // so compare only the first 5 characters to match.
-  return bookings.value.filter(b => b.date === dateStr && b.start_time?.substring(0, 5) === time)
+  // Each slot is 30 minutes. Show bookings that OVERLAP with the slot,
+  // not just those that start exactly on the slot boundary.
+  // Example: a 09:15-10:00 booking appears in both 09:00 and 09:30 slots.
+  const [hours, minutes] = time.split(':').map(Number)
+  const slotEndMinutes = hours * 60 + minutes + 30
+  const slotEnd = `${Math.floor(slotEndMinutes / 60).toString().padStart(2, '0')}:${(slotEndMinutes % 60).toString().padStart(2, '0')}`
+
+  return bookings.value.filter(b => {
+    if (b.date !== dateStr) return false
+    const bookingStart = b.start_time?.substring(0, 5)
+    const bookingEnd = b.end_time?.substring(0, 5)
+    // Overlap: booking starts before slot ends AND booking ends after slot starts
+    return bookingStart < slotEnd && bookingEnd > time
+  })
 }
 
 function isToday(dateStr: string): boolean {
@@ -297,15 +340,20 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  filterBarberId.value = ''
+  if (!isBarberRole.value) {
+    filterBarberId.value = ''
+  }
   filterStatus.value = ''
   fetchCalendarBookings()
 }
 
 // ─── Lifecycle ─────────────────────────────────────
-onMounted(() => {
+onMounted(async () => {
+  await fetchCurrentBarberId()
   fetchCalendarBookings()
-  fetchBarbers()
+  if (!isBarberRole.value) {
+    fetchBarbers()
+  }
 })
 
 // Watch view mode changes
@@ -344,8 +392,9 @@ watch(viewMode, () => {
     <!-- Filters -->
     <div class="card-design p-3">
       <div class="flex flex-wrap items-center gap-3">
-        <!-- Barber filter -->
+        <!-- Barber filter (hidden for barber role — they only see their own bookings) -->
         <select
+          v-if="!isBarberRole"
           v-model="filterBarberId"
           class="rounded-input border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-3 py-1.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-deep)]"
         >
