@@ -51,7 +51,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'No shop assigned' })
   }
 
-  if (!['admin', 'manager', 'cashier'].includes(userData.role || '')) {
+  // Allow admin, manager, cashier, and barber roles
+  const allowedRoles = ['admin', 'manager', 'cashier', 'barber']
+  if (!allowedRoles.includes(userData.role || '')) {
     throw createError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
@@ -65,8 +67,8 @@ export default defineEventHandler(async (event) => {
 
   const shopId = userData.shop_id
 
-  // ── Fetch all bookings in date range ──
-  const { data: bookings, error: fetchError } = await supabase
+  // ── Fetch bookings in date range ──
+  let bookingsQuery = supabase
     .from('bookings')
     .select(`
       id, booking_ref, shop_id, customer_id, barber_id, service_id,
@@ -78,6 +80,22 @@ export default defineEventHandler(async (event) => {
     .gte('date', dateFrom)
     .lte('date', dateTo)
     .order('date', { ascending: false })
+
+  // If barber role, restrict to own bookings
+  if (userData.role === 'barber') {
+    const { data: barberData } = await supabase
+      .from('barbers')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('shop_id', shopId)
+      .single()
+
+    if (barberData) {
+      bookingsQuery = bookingsQuery.eq('barber_id', barberData.id)
+    }
+  }
+
+  const { data: bookings, error: fetchError } = await bookingsQuery
 
   if (fetchError) {
     throw createError({ statusCode: 500, statusMessage: 'Failed to fetch bookings' })

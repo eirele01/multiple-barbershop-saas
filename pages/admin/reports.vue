@@ -267,16 +267,20 @@ onMounted(() => {
           <div v-if="revenueOverTime.length === 0" class="py-8 text-center text-xs text-[var(--color-titanium)]">
             No revenue data for this period
           </div>
-          <div v-else class="flex items-end gap-[2px]" style="height: 180px;">
+          <div v-else class="flex items-end gap-1" style="height: 180px;">
             <div
               v-for="(item, idx) in revenueOverTime"
               :key="idx"
-              class="group relative flex-1 min-w-[4px] rounded-t-sm bg-[var(--color-success)]/70 transition-colors hover:bg-[var(--color-success)]"
-              :style="{ height: `${Math.max((item.amount / maxRevenue) * 100, 2)}%` }"
+              class="group relative flex-1 min-w-[8px] rounded-t-sm bg-[var(--color-success)] transition-colors hover:bg-[var(--color-success)]/80"
+              :style="{ height: `${Math.max((item.amount / maxRevenue) * 100, 4)}%` }"
             >
-              <!-- Tooltip -->
-              <div class="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-[var(--color-deep)] px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <!-- Tooltip (always visible on hover) -->
+              <div class="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded bg-[var(--color-deep)] px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100 z-10">
                 {{ formatDate(item.date) }}: {{ formatPrice(item.amount) }}
+              </div>
+              <!-- Value label shown below bar on hover -->
+              <div class="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-medium text-[var(--color-deep)] opacity-0 transition-opacity group-hover:opacity-100">
+                {{ formatPrice(item.amount) }}
               </div>
             </div>
           </div>
