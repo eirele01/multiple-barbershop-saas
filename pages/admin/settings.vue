@@ -42,7 +42,7 @@ const instapayEnabled = ref(true)
 const qrPhEnabled = ref(true)
 const webhookUrl = ref('')
 const shopSlug = ref('')
-const shopPlan = ref<'basic' | 'upgraded'>('basic')
+const shopPlan = ref<string>('basic')
 
 const hasSecretKeySaved = ref(false)
 const hasWebhookSecretSaved = ref(false)
@@ -64,7 +64,7 @@ const reminderHoursSecond = ref(2)
 
 // ─── Computed ────────────────────────────────────────
 const isAdmin = computed(() => authStore.role === 'admin')
-const isUpgradedPlan = computed(() => shopPlan.value === 'upgraded')
+const isUpgradedPlan = computed(() => shopPlan.value !== 'basic')
 const isBasicPlan = computed(() => shopPlan.value === 'basic')
 
 const atLeastOnePayMongoMethod = computed(() =>

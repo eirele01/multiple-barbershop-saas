@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Shop not found' })
   }
 
-  if (shop.plan !== 'upgraded' || !shop.paymongo_enabled) {
+  if (shop.plan === 'basic' || !shop.paymongo_enabled) {
     throw createError({ statusCode: 403, statusMessage: 'PayMongo is not enabled for this shop' })
   }
 

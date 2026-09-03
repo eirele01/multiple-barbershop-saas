@@ -55,7 +55,7 @@ const actionOptions = [
 
 // ─── Retention notice ──────────────────────────────
 const retentionNotice = computed(() => {
-  if (shopStore.isUpgradedPlan) {
+  if (shopStore.effectivePlan !== 'basic') {
     return 'Showing last 90 days'
   }
   return 'Showing last 7 days'
@@ -212,7 +212,7 @@ onMounted(() => {
         <span
           class="badge-pill text-xs"
           :class="
-            shopStore.isUpgradedPlan
+            shopStore.effectivePlan !== 'basic'
               ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
               : 'bg-[var(--color-warning)]/10 text-[var(--color-warning)]'
           "

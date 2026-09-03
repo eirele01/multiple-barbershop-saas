@@ -493,7 +493,7 @@ export default defineEventHandler(async (event) => {
   // No redeemPoints() call here — that happens in complete.patch.ts AFTER awarding earned points.
 
   // Step 6b: Award welcome bonus for first-time customers (upgraded shops only)
-  if (resolvedCustomerId && shop.plan === 'upgraded' && shop.loyalty_enabled) {
+  if (resolvedCustomerId && shop.plan !== 'basic' && shop.loyalty_enabled) {
     try {
       const { awardWelcomeBonus } = await import('~/utils/server/loyaltyEngine')
       await awardWelcomeBonus(shopId, resolvedCustomerId, {

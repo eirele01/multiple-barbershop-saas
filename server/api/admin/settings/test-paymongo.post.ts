@@ -83,13 +83,13 @@ export default defineEventHandler(async (event) => {
   // Only enforce plan and enabled checks when testing a SAVED key.
   // When testing an unsaved key (before first save), we allow it so the user
   // can verify their key works before enabling PayMongo.
-  if (!body.useUnsavedKey && (shop.plan !== 'upgraded' || !shop.paymongo_enabled)) {
+  if (!body.useUnsavedKey && (shop.plan === 'basic' || !shop.paymongo_enabled)) {
     throw createError({ statusCode: 403, statusMessage: 'PayMongo is not enabled for this shop. Enable it and save first, or test an unsaved key.' })
   }
 
   // Still check plan for unsaved key tests — only upgraded shops can use PayMongo
-  if (body.useUnsavedKey && shop.plan !== 'upgraded') {
-    throw createError({ statusCode: 403, statusMessage: 'PayMongo requires the Upgraded plan' })
+  if (body.useUnsavedKey && shop.plan === 'basic') {
+    throw createError({ statusCode: 403, statusMessage: 'PayMongo requires a paid plan' })
   }
 
   // Determine which key to test

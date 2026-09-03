@@ -131,8 +131,8 @@ export async function sendShopEmail(
     // 'staff.invited' is exempt for the same reason: staff can't log in
     // without their set-password invite, on any plan.
     const PLAN_EXEMPT_TEMPLATES: EmailTemplate[] = ['account.created', 'staff.invited']
-    if (shop.plan !== 'upgraded' && !PLAN_EXEMPT_TEMPLATES.includes(template)) {
-      console.warn(`[EMAIL] Skipped '${template}' — shop plan is '${shop.plan}' (requires 'upgraded') | shop: ${shop.name}`)
+    if (shop.plan === 'basic' && !PLAN_EXEMPT_TEMPLATES.includes(template)) {
+      console.warn(`[EMAIL] Skipped '${template}' — shop plan is '${shop.plan}' (requires a paid plan) | shop: ${shop.name}`)
       return { sent: false, error: 'basic_plan' }
     }
 

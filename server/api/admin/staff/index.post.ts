@@ -12,7 +12,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { TIER_LIMITS } from '~/constants/tierLimits'
+import { getPlanLimits, resolveShopPlan } from '~/utils/server/plans'
 import { SHOP_STAFF_ROLES } from '~/constants/roles'
 import { sendShopEmail } from '~/utils/server/sendShopEmail'
 
@@ -96,20 +96,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Failed to check staff count' })
   }
 
-  // Get shop plan
-  const { data: shop } = await supabaseAdmin
-    .from('shops')
-    .select('plan')
-    .eq('id', shopId)
-    .single()
-
-  const plan = shop?.plan || 'basic'
-  const staffLimit = TIER_LIMITS[plan as keyof typeof TIER_LIMITS].staff
+  // Get shop plan — effective (honors expiry + grace)
+  const shopPlan = await resolveShopPlan(supabaseAdmin, shopId)
+  const plan = shopPlan?.effectivePlan || 'basic'
+  const planLimits = await getPlanLimits(supabaseAdmin, plan)
+  const staffLimit = planLimits.staff
 
   if (staffLimit !== Infinity && (currentStaffCount || 0) >= staffLimit) {
     throw createError({
       statusCode: 403,
-      statusMessage: `You've reached the maximum of ${staffLimit} staff members on the ${plan === 'basic' ? 'Basic' : 'Upgraded'} plan. Upgrade for unlimited staff.`,
+      statusMessage: `You've reached the maximum of ${staffLimit} staff members on your current plan. Upgrade to a higher plan to add more.`,
     })
   }
 

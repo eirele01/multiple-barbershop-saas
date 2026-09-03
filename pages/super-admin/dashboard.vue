@@ -191,7 +191,7 @@ const barChartData = computed(() => ({
 }))
 
 const doughnutChartData = computed(() => ({
-  labels: ['Basic', 'Upgraded'],
+  labels: ['Basic', 'Paid'],
   datasets: [
     {
       data: planDistributionData.value,
@@ -249,7 +249,7 @@ const doughnutChartData = computed(() => ({
           color="warning"
         />
         <DashboardStatCard
-          label="Upgraded Plan"
+          label="Paid Plans"
           :value="upgradedPlanCount"
           icon="lucide:crown"
           color="info"

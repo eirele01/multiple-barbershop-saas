@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Verify PayMongo is enabled and on upgraded plan
-  if (shop.plan !== 'upgraded' || !shop.paymongo_enabled || !shop.paymongo_secret_key) {
+  if (shop.plan === 'basic' || !shop.paymongo_enabled || !shop.paymongo_secret_key) {
     throw createError({ statusCode: 403, statusMessage: 'PayMongo is not enabled for this shop' })
   }
 

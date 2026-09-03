@@ -6,6 +6,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { resolveShopPlan } from '~/utils/server/plans'
 
 const loyaltySettingsSchema = z.object({
   loyalty_enabled: z.boolean().optional(),
@@ -53,15 +54,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Admin access required' })
   }
 
-  // Check plan
-  const { data: shop } = await supabase
-    .from('shops')
-    .select('plan')
-    .eq('id', userData.shop_id)
-    .single()
+  // Check plan — effective (honors expiry + grace)
+  const shopPlan = await resolveShopPlan(supabase, userData.shop_id)
+  const effectivePlanCode = shopPlan?.effectivePlan || 'basic'
 
-  if (!shop || shop.plan !== 'upgraded') {
-    throw createError({ statusCode: 403, statusMessage: 'Loyalty features require the Upgraded plan' })
+  if (effectivePlanCode === 'basic') {
+    throw createError({ statusCode: 403, statusMessage: 'Loyalty features require a paid plan' })
   }
 
   // Validate body

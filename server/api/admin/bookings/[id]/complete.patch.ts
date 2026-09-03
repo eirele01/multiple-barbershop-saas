@@ -125,7 +125,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', userData.shop_id)
       .single()
 
-    if (shop && shop.loyalty_enabled && shop.plan === 'upgraded') {
+    if (shop && shop.loyalty_enabled && shop.plan !== 'basic') {
       try {
         // ── Step A: Award earned points ──
         const customerTotalPoints = await getCustomerTotalEarned(userData.shop_id, booking.customer_id)

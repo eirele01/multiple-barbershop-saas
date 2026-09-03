@@ -12,7 +12,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { readMultipartFormData } from 'h3'
-import { TIER_LIMITS } from '~/constants/tierLimits'
+import { getPlanLimits, resolveShopPlan } from '~/utils/server/plans'
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
@@ -65,20 +65,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Failed to check gallery limit' })
   }
 
-  // Get shop plan
-  const { data: shop } = await supabaseAdmin
-    .from('shops')
-    .select('plan')
-    .eq('id', userProfile.shop_id)
-    .single()
-
-  const plan = shop?.plan || 'basic'
-  const limit = TIER_LIMITS[plan as keyof typeof TIER_LIMITS]?.gallery ?? TIER_LIMITS.basic.gallery
+  // Get shop plan — effective (honors expiry + grace)
+  const shopPlan = await resolveShopPlan(supabaseAdmin, userProfile.shop_id)
+  const plan = shopPlan?.effectivePlan || 'basic'
+  const planLimits = await getPlanLimits(supabaseAdmin, plan)
+  const limit = planLimits.gallery
 
   if (limit !== Infinity && (currentCount || 0) >= limit) {
     throw createError({
       statusCode: 403,
-      statusMessage: `You've reached the maximum of ${limit} gallery images on the Basic plan. Upgrade to the Upgraded plan for unlimited gallery!`,
+      statusMessage: `You've reached the maximum of ${limit} gallery images on your current plan. Upgrade to a higher plan to add more.`,
     })
   }
 
@@ -128,7 +124,7 @@ export default defineEventHandler(async (event) => {
     const remaining = limit - (currentCount || 0)
     throw createError({
       statusCode: 403,
-      statusMessage: `You can only upload ${remaining} more image(s) on the Basic plan. You tried to upload ${files.length}.`,
+      statusMessage: `You can only upload ${remaining} more image(s) on your current plan. You tried to upload ${files.length}.`,
     })
   }
 

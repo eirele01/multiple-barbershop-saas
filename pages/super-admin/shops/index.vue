@@ -114,11 +114,26 @@ function getInitial(name: string): string {
 
 const totalPages = computed(() => Math.ceil(totalShops.value / perPage))
 
-const planOptions = [
+const planOptions = ref<{ value: string, label: string }[]>([
   { value: '', label: 'All Plans' },
   { value: 'basic', label: 'Basic' },
   { value: 'upgraded', label: 'Upgraded' },
-]
+])
+
+// Refresh labels from the Tier Maker so new plans (e.g. 'pro') appear.
+async function refreshPlanOptions() {
+  try {
+    const data = await $fetch('/api/billing/plans') as any
+    const codes = (data.plans || []).map((p: any) => p.code)
+    const planMap = Object.fromEntries((data.plans || []).map((p: any) => [p.code, p.name]))
+    planOptions.value = [
+      { value: '', label: 'All Plans' },
+      ...codes.map(c => ({ value: c, label: planMap[c] || c.charAt(0).toUpperCase() + c.slice(1) })),
+    ]
+  } catch (e) {
+    console.error('Failed to load plan options:', e)
+  }
+}
 
 const statusOptions = [
   { value: '', label: 'All Statuses' },
@@ -128,6 +143,7 @@ const statusOptions = [
 
 onMounted(() => {
   fetchShops()
+  refreshPlanOptions()
 })
 </script>
 

@@ -61,18 +61,21 @@ const canManage = computed(() => {
 const canDelete = computed(() => authStore.role === 'admin')
 
 const tierCheck = computed(() => {
-  const plan = shopStore.plan || 'basic'
+  const plan = shopStore.effectivePlan
   return checkTierLimit(plan, 'products', products.value.length)
 })
 
 const isAtLimit = computed(() => !tierCheck.value.allowed)
 
+const planLabel = computed(() => {
+  const plan = shopStore.effectivePlan
+  return plan === 'basic' ? 'Basic' : plan.charAt(0).toUpperCase() + plan.slice(1)
+})
+
 const countLabel = computed(() => {
-  const plan = shopStore.plan || 'basic'
-  const isBasic = plan === 'basic'
-  const limit = isBasic ? '10' : '∞'
-  const planLabel = isBasic ? 'Basic' : 'Upgraded'
-  return `${products.value.length} / ${limit} products (${planLabel})`
+  const limit = tierCheck.value.limit
+  const label = limit === Infinity || limit === -1 ? '∞' : String(limit)
+  return `${products.value.length} / ${label} products (${planLabel})`
 })
 
 // ─── Fetch products ───────────────────────────────────

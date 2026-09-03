@@ -37,6 +37,7 @@ export default defineEventHandler(async (event) => {
   const { data: shops, error } = await supabaseQuery
 
   if (error) {
+    console.error('[GET /api/shops] Supabase error:', JSON.stringify({ message: error.message, code: error.code, details: error.details, hint: error.hint }))
     throw createError({ statusCode: 500, statusMessage: 'Failed to fetch shops' })
   }
 

@@ -187,7 +187,7 @@ async function cancelBooking() {
 
 const { formatPrice, formatTime, formatDate, formatDateTime } = useFormat()
 
-const isUpgraded = computed(() => shopStore.isUpgradedPlan)
+const isUpgraded = computed(() => shopStore.effectivePlan !== 'basic')
 
 onMounted(() => {
   fetchBooking()

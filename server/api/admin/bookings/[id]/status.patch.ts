@@ -120,7 +120,7 @@ export default defineEventHandler(async (event) => {
         .eq('id', userData.shop_id)
         .single()
 
-      if (shop && shop.loyalty_enabled && shop.plan === 'upgraded') {
+      if (shop && shop.loyalty_enabled && shop.plan !== 'basic') {
         // NO refund for points_redeemed — they were never actually deducted.
         // The points_redeemed field on the booking is just an INTENT that was never executed.
 

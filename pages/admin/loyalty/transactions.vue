@@ -15,7 +15,7 @@ definePageMeta({
 
 const shopStore = useShopStore()
 const toast = useToast()
-const isUpgraded = computed(() => shopStore.isUpgradedPlan)
+const isUpgraded = computed(() => shopStore.effectivePlan !== 'basic')
 
 // ─── State ────────────────────────────────────────
 const isLoading = ref(true)

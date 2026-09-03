@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia'
-import type { Shop, SubscriptionPlan } from '~/types/database'
+import type { Shop, SubscriptionPlan, PlanStatus, BillingInterval } from '~/types/database'
+
+/** Grace period (days) after plan_end_date during which features still work. */
+export const PLAN_GRACE_PERIOD_DAYS = 7
 
 interface ShopState {
   currentShop: Shop | null
@@ -19,33 +22,98 @@ export const useShopStore = defineStore('shop', {
     plan: (state): SubscriptionPlan | null => state.currentShop?.plan ?? null,
 
     /**
-     * Is the current shop on the Basic plan?
+     * The current shop's subscription status (active / inactive / trial)
      */
-    isBasicPlan: (state): boolean => state.currentShop?.plan === 'basic',
+    planStatus: (state): PlanStatus | null => state.currentShop?.plan_status ?? null,
 
     /**
-     * Is the current shop on the Upgraded plan?
+     * Billing interval of the last payment (monthly | yearly)
      */
-    isUpgradedPlan: (state): boolean => state.currentShop?.plan === 'upgraded',
+    billingInterval: (state): BillingInterval => state.currentShop?.billing_interval ?? 'monthly',
 
     /**
-     * Is PayMongo enabled for this shop? (Upgraded only)
+     * When the paid plan expires (null = no expiry — free plan or manual grant)
      */
-    isPayMongoEnabled: (state): boolean =>
-      state.currentShop?.plan === 'upgraded' && state.currentShop.paymongo_enabled,
+    planEndDate: (state): string | null => state.currentShop?.plan_end_date ?? null,
 
     /**
-     * Is loyalty enabled for this shop? (Upgraded only)
+     * Days until plan_end_date. Null = no expiry. Negative = expired.
      */
-    isLoyaltyEnabled: (state): boolean =>
-      state.currentShop?.plan === 'upgraded' && state.currentShop.loyalty_enabled,
+    planDaysRemaining: (state): number | null => {
+      const end = state.currentShop?.plan_end_date
+      if (!end) return null
+      return Math.ceil((new Date(end).getTime() - Date.now()) / 86_400_000)
+    },
 
     /**
-     * Is email notification enabled for this shop? (Upgraded only)
+     * True once plan_end_date has passed.
      */
-    isEmailEnabled: (state): boolean =>
-      state.currentShop?.plan === 'upgraded' &&
-      !!(state.currentShop?.resend_api_key && state.currentShop?.sender_email),
+    planExpired: (state): boolean => {
+      const end = state.currentShop?.plan_end_date
+      return !!end && new Date(end).getTime() < Date.now()
+    },
+
+    /**
+     * Expired but still inside the grace window — features keep working.
+     */
+    planInGrace: (state): boolean => {
+      const end = state.currentShop?.plan_end_date
+      if (!end) return false
+      const days = Math.ceil((new Date(end).getTime() - Date.now()) / 86_400_000)
+      return days < 0 && days >= -PLAN_GRACE_PERIOD_DAYS
+    },
+
+    /**
+     * The plan actually enforced for limits/features.
+     * Expired-beyond-grace paid plans fall back to 'basic'.
+     */
+    effectivePlan: (state): SubscriptionPlan => {
+      const end = state.currentShop?.plan_end_date
+      if (end) {
+        const days = Math.ceil((new Date(end).getTime() - Date.now()) / 86_400_000)
+        if (days < -PLAN_GRACE_PERIOD_DAYS) return 'basic'
+      }
+      return state.currentShop?.plan || 'basic'
+    },
+
+    /**
+     * Is the current shop effectively on the free/default plan?
+     * (true also when a paid plan expired beyond the grace window)
+     */
+    isBasicPlan(): boolean {
+      return this.effectivePlan === 'basic'
+    },
+
+    /**
+     * Is the current shop on ANY paid plan (upgraded, pro, or any Tier-Maker
+     * plan with a price)? False once a paid plan expires beyond grace.
+     * 'basic' is the canonical free/default plan code.
+     */
+    isUpgradedPlan(): boolean {
+      return this.effectivePlan !== 'basic'
+    },
+
+    /**
+     * Is PayMongo enabled for this shop? (Any paid plan, not expired)
+     */
+    isPayMongoEnabled(): boolean {
+      return this.effectivePlan !== 'basic' && !!this.currentShop?.paymongo_enabled
+    },
+
+    /**
+     * Is loyalty enabled for this shop? (Any paid plan, not expired)
+     */
+    isLoyaltyEnabled(): boolean {
+      return this.effectivePlan !== 'basic' && !!this.currentShop?.loyalty_enabled
+    },
+
+    /**
+     * Is email notification enabled for this shop? (Any paid plan, not expired)
+     */
+    isEmailEnabled(): boolean {
+      return this.effectivePlan !== 'basic' &&
+        !!(this.currentShop?.resend_api_key && this.currentShop?.sender_email)
+    },
 
     /**
      * Shop slug

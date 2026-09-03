@@ -15,7 +15,6 @@ import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
 import { checkTierLimit } from '~/utils/tierLimits'
 import type { Barber, BarberSchedule, BarberTimeOff, Service, UserRole } from '~/types/database'
-import { TIER_LIMITS } from '~/constants/tierLimits'
 
 definePageMeta({
   layout: 'admin',
@@ -105,16 +104,17 @@ const isAdmin = computed(() => authStore.role === 'admin')
 
 // ─── Tier limit ──────────────────────────────────────
 const tierLimit = computed(() => {
-  const plan = shopStore.plan || 'basic'
+  const plan = shopStore.effectivePlan
   return checkTierLimit(plan, 'staff', staff.value.length)
 })
 
 const staffLimitLabel = computed(() => {
-  const plan = shopStore.plan || 'basic'
-  const limit = TIER_LIMITS[plan].staff
+  const plan = shopStore.effectivePlan
+  const limit = tierLimit.value.limit
   const current = staff.value.length
+  const planLabel = plan === 'basic' ? 'Basic' : plan.charAt(0).toUpperCase() + plan.slice(1)
   if (limit === Infinity) return `${current} staff (Unlimited)`
-  return `${current} / ${limit} staff (${plan === 'basic' ? 'Basic' : 'Upgraded'})`
+  return `${current} / ${limit} staff (${planLabel})`
 })
 
 // ─── Days of week ────────────────────────────────────
@@ -1219,9 +1219,9 @@ function roleLabel(role: string): string {
       :is-open="showUpgradePrompt"
       resource="staff"
       :current-count="staff.length"
-      :limit="5"
+      :limit="tierLimit.limit === Infinity ? 5 : tierLimit.limit"
       @close="showUpgradePrompt = false"
-      @upgrade="showUpgradePrompt = false; navigateTo('/admin/settings')"
+      @upgrade="showUpgradePrompt = false; navigateTo('/admin/billing')"
     />
   </div>
 </template>

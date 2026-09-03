@@ -30,6 +30,9 @@ export default defineNuxtConfig({
     '/customer/register': { noSSR: true },
     '/auth/verify-email': { noSSR: true },
     // Heavy admin routes — no SSR (data loaded client-side, reduces server load)
+    '/admin/billing': { noSSR: true },
+    // Legacy upgrade page — moved to the billing hub
+    '/admin/upgrade': { redirect: '/admin/billing' },
     '/admin/loyalty/members': { noSSR: true },
     '/admin/loyalty/rewards': { noSSR: true },
     '/admin/loyalty/transactions': { noSSR: true },
@@ -79,12 +82,6 @@ export default defineNuxtConfig({
           rel: 'stylesheet',
           href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap',
         },
-        {
-        rel: 'stylesheet',
-        href: 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-        integrity: 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=',
-        crossorigin: '',
-      },
       ],
     },
   },
@@ -95,6 +92,9 @@ export default defineNuxtConfig({
     resendApiKey: process.env.RESEND_API_KEY || '',
     resendSenderEmail: process.env.RESEND_SENDER_EMAIL || '',
     nuxtEncryptionKey: process.env.NUXT_ENCRYPTION_KEY || '',
+    // Platform-level PayMongo keys — used for SaaS plan upgrades (money goes to the platform)
+    paymongoSecretKey: process.env.PAYMONGO_SECRET_KEY || '',
+    paymongoWebhookSecret: process.env.PAYMONGO_WEBHOOK_SECRET || '',
 
     // Public (exposed to client)
     public: {

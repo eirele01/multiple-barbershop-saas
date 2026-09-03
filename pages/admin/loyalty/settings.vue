@@ -42,7 +42,7 @@ const tiers = ref<LoyaltyTiers>({
   platinum: { min: 3000, max: null, multiplier: 2.0 },
 })
 
-const isUpgraded = computed(() => shopStore.isUpgradedPlan)
+const isUpgraded = computed(() => shopStore.effectivePlan !== 'basic')
 
 // ─── Fetch Settings ────────────────────────────────
 async function fetchSettings() {

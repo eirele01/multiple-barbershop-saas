@@ -71,7 +71,7 @@ export function calculatePointsToEarn(
   shopConfig: ShopLoyaltyConfig,
   customerTotalPoints: number
 ): number {
-  if (!shopConfig.loyalty_enabled || shopConfig.plan !== 'upgraded') {
+  if (!shopConfig.loyalty_enabled || shopConfig.plan === 'basic') {
     return 0
   }
 
@@ -467,7 +467,7 @@ export async function awardWelcomeBonus(
 ): Promise<PointsResult> {
   const bonusPoints = shopConfig.loyalty_welcome_bonus || 0
 
-  if (bonusPoints <= 0 || !shopConfig.loyalty_enabled || shopConfig.plan !== 'upgraded') {
+  if (bonusPoints <= 0 || !shopConfig.loyalty_enabled || shopConfig.plan === 'basic') {
     return { success: true, points: 0, balanceAfter: await getCustomerBalance(shopId, customerId) }
   }
 

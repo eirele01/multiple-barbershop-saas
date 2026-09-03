@@ -5,9 +5,10 @@
 
 export type UserRole = 'super_admin' | 'admin' | 'manager' | 'cashier' | 'barber' | 'customer'
 
-export type SubscriptionPlan = 'basic' | 'upgraded'
+export type SubscriptionPlan = 'basic' | 'upgraded' | 'pro' | (string & {})
 
 export type PlanStatus = 'active' | 'inactive' | 'trial'
+export type BillingInterval = 'monthly' | 'yearly'
 
 export type BookingStatus = 'pending' | 'pending_payment' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show'
 
@@ -82,6 +83,7 @@ export interface Shop {
   plan_status: PlanStatus
   plan_start_date: string | null
   plan_end_date: string | null
+  billing_interval: BillingInterval
 
   // Contact
   email: string | null

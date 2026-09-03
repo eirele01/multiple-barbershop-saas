@@ -51,6 +51,20 @@ const isImpersonating = ref(false)
 const isUpdatingPlan = ref(false)
 const planExpiryDate = ref('')
 
+// Available plans (from the Tier Maker) for the plan switcher
+const availablePlans = ref<any[]>([])
+const selectedPlan = computed(() => shop.value?.plan || 'basic')
+
+async function fetchAvailablePlans() {
+  try {
+    const data = await authFetch('/api/billing/plans') as any
+    availablePlans.value = (data.plans || []).filter((p: any) => p.code !== (shop.value?.plan || 'basic'))
+  } catch (error: unknown) {
+    console.error('Failed to load plans:', error)
+    availablePlans.value = []
+  }
+}
+
 // ─── Fetch Shop Detail ────────────────────────────
 async function fetchShop() {
   isLoading.value = true
@@ -173,21 +187,24 @@ async function impersonateShop() {
 }
 
 // ─── Update Plan ──────────────────────────────────
-async function updatePlan(plan: 'basic' | 'upgraded') {
-  const action = plan === 'upgraded' ? 'upgrade' : 'downgrade'
-  const ok = await confirm({ title: `${action === 'upgrade' ? 'Upgrade' : 'Downgrade'} Plan`, message: `Are you sure you want to ${action} this shop to the ${plan} plan?`, confirmLabel: action === 'upgrade' ? 'Upgrade' : 'Downgrade', variant: 'warning' })
+async function updatePlan(plan: string) {
+  const target = availablePlans.value.find(p => p.code === plan)
+  const action = plan === 'basic' ? 'downgrade' : 'upgrade'
+  const planLabel = plan === 'basic' ? 'Basic' : (target?.name || plan.charAt(0).toUpperCase() + plan.slice(1))
+  const ok = await confirm({ title: `${action === 'upgrade' ? 'Upgrade' : 'Downgrade'} Plan`, message: `Are you sure you want to ${action} this shop to the ${planLabel} plan?`, confirmLabel: action === 'upgrade' ? 'Upgrade' : 'Downgrade', variant: 'warning' })
   if (!ok) return
 
   isUpdatingPlan.value = true
   try {
     await authFetch(`/api/super-admin/shops/${shopId}/subscription`, {
       method: 'PATCH',
-      body: { plan, plan_status: plan === 'upgraded' ? 'active' : undefined },
+      body: { plan, plan_status: plan !== 'basic' ? 'active' : undefined },
     })
 
-    toast.success(`Shop ${action}d to ${plan} plan`)
+    toast.success(`Shop ${action}d to ${planLabel} plan`)
     await fetchShop()
     fetchSubscriptionHistory()
+    fetchAvailablePlans()
   } catch (error: unknown) {
     const msg = error?.data?.statusMessage || error?.message || `Failed to ${action} plan`
     toast.error(msg)
@@ -235,6 +252,7 @@ function handleTabKeyShopDetail(e: KeyboardEvent) {
 
 onMounted(() => {
   fetchShop()
+  fetchAvailablePlans()
 })
 </script>
 
@@ -593,28 +611,23 @@ onMounted(() => {
             <!-- Plan Actions -->
             <div class="card-design p-6">
               <h2 class="mb-4 text-lg font-semibold text-[var(--color-deep)]">Plan Actions</h2>
-              <div class="flex flex-wrap gap-3">
+              <div v-if="availablePlans.length > 0" class="flex flex-wrap gap-3">
                 <button
-                  v-if="shop.plan === 'basic'"
-                  class="btn-design inline-flex items-center gap-2 rounded-btn bg-[var(--color-info)] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
+                  v-for="target in availablePlans"
+                  :key="target.code"
+                  class="btn-design inline-flex items-center gap-2 rounded-btn px-5 py-2.5 text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-50"
+                  :class="target.priceMonthly > 0
+                    ? 'bg-[var(--color-info)] text-white'
+                    : 'border border-[var(--color-warning)] text-[var(--color-warning)] hover:bg-[var(--color-warning)]/5'"
                   :disabled="isUpdatingPlan"
-                  @click="updatePlan('upgraded')"
+                  @click="updatePlan(target.code)"
                 >
                   <Icon v-if="isUpdatingPlan" name="lucide:loader-2" class="h-4 w-4 animate-spin" />
-                  <Icon v-else name="lucide:arrow-up-circle" class="h-4 w-4" />
-                  Upgrade to Paid
-                </button>
-                <button
-                  v-if="shop.plan === 'upgraded'"
-                  class="btn-design inline-flex items-center gap-2 rounded-btn border border-[var(--color-warning)] px-5 py-2.5 text-sm font-semibold text-[var(--color-warning)] transition-all hover:bg-[var(--color-warning)]/5 disabled:opacity-50"
-                  :disabled="isUpdatingPlan"
-                  @click="updatePlan('basic')"
-                >
-                  <Icon v-if="isUpdatingPlan" name="lucide:loader-2" class="h-4 w-4 animate-spin" />
-                  <Icon v-else name="lucide:arrow-down-circle" class="h-4 w-4" />
-                  Downgrade to Basic
+                  <Icon v-else :name="target.priceMonthly > 0 ? 'lucide:arrow-up-circle' : 'lucide:arrow-down-circle'" class="h-4 w-4" />
+                  {{ target.priceMonthly > 0 ? `Upgrade to ${target.name}` : `Downgrade to ${target.name}` }}
                 </button>
               </div>
+              <p v-else class="text-sm text-[var(--color-titanium)]">No other plans are available right now.</p>
 
               <!-- Set Expiry Date -->
               <div class="mt-6 border-t border-[var(--color-silver)]/30 pt-4">

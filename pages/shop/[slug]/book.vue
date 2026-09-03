@@ -76,7 +76,7 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info',
 }
 
 // ── Computed helpers ──
-const isUpgraded = computed(() => shop.value?.plan === 'upgraded')
+const isUpgraded = computed(() => shop.value?.plan && shop.value.plan !== 'basic')
 const workingHours = computed(() => (shop.value?.working_hours || []) as WorkingHoursDay[])
 
 function getEligibleBarbers(service: Service | null): BarberWithProfile[] {

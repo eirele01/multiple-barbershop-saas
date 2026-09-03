@@ -27,6 +27,20 @@ const route = useRoute()
 const toast = useToast()
 const { authFetch } = useAuthFetch()
 
+
+
+/** Human-readable billing/expiry status for the Current Plan widget. */
+const planExpiryText = computed(() => {
+  const end = shopStore.planEndDate
+  if (!end) return null
+  const days = Math.ceil((new Date(end).getTime() - Date.now()) / 86_400_000)
+  const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (days < 0) return `Expired ${Math.abs(days)}d ago`
+  if (days === 0) return 'Expires today'
+  if (days <= 30) return `Expires in ${days} day${days === 1 ? '' : 's'}`
+  return `Renews ${fmt(new Date(end))}`
+})
+
 // Onboarding state
 const showOnboardingBanner = ref(false)
 const isOnboardingDismissed = ref(false)
@@ -73,6 +87,10 @@ const todayBookings = computed(() => stats.value.todayBookings)
 const pendingPayments = computed(() => stats.value.pendingPayments)
 const todayRevenue = computed(() => stats.value.todayRevenue)
 const activeStaff = computed(() => stats.value.activeStaff)
+
+// ─── Plan widget ────────────────────────────────────
+// Compact chip only — usage meters, billing history, and plan comparison
+// live on /admin/billing (single source of truth).
 
 // ─── Today's Bookings list (left column card) ───────
 interface TodayBooking {
@@ -135,7 +153,8 @@ const checklistAllDone = computed(() => checklistDoneCount.value === checklistIt
 
 // Check for onboarding query param from registration
 onMounted(async () => {
-  if (!shopStore.currentShop && authStore.shopId) {
+  // Always refresh — the plan may have changed (e.g. after a payment)
+  if (authStore.shopId) {
     await shopStore.loadCurrentShop()
   }
 
@@ -228,13 +247,13 @@ const displayOnboarding = computed(() => showOnboardingBanner.value && !isOnboar
       </p>
       <!-- Plan badge -->
       <div class="mt-2 flex items-center gap-2">
-        <PlanBadge :plan="shopStore.isUpgradedPlan ? 'upgraded' : 'basic'" />
+        <PlanBadge :plan="shopStore.effectivePlan" />
         <NuxtLink
-          v-if="shopStore.isBasicPlan"
-          to="/admin/settings"
+          v-if="shopStore.isBasicPlan || shopStore.planExpired"
+          to="/admin/billing"
           class="text-xs font-medium text-[var(--color-info)] hover:underline"
         >
-          Upgrade for more features
+          {{ shopStore.planExpired && !shopStore.isBasicPlan ? 'Renew your plan' : 'Upgrade for more features' }}
         </NuxtLink>
       </div>
     </div>
@@ -411,6 +430,24 @@ const displayOnboarding = computed(() => showOnboardingBanner.value && !isOnboar
             class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-info)] hover:underline"
           >
             Review payments
+            <Icon name="lucide:arrow-right" class="h-4 w-4" />
+          </NuxtLink>
+        </div>
+
+        <!-- Current Plan (compact — details live on /admin/billing) -->
+        <div class="card-design p-6">
+          <div class="flex items-center justify-between">
+            <h3 class="text-[var(--color-deep)]">Current Plan</h3>
+            <PlanBadge :plan="shopStore.effectivePlan" />
+          </div>
+          <p v-if="planExpiryText" class="mt-2 text-xs" :class="shopStore.planExpired ? 'text-[var(--color-danger)]' : 'text-[var(--color-titanium)]'">
+            {{ planExpiryText }} · <span class="capitalize">{{ shopStore.billingInterval }}</span>
+          </p>
+          <NuxtLink
+            to="/admin/billing"
+            class="mt-4 flex w-full items-center justify-center gap-1.5 rounded-btn bg-[var(--color-deep)] py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-titanium)]"
+          >
+            Manage Plan
             <Icon name="lucide:arrow-right" class="h-4 w-4" />
           </NuxtLink>
         </div>

@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', shopId)
       .single()
 
-    if (!shop || !shop.loyalty_enabled || shop.plan !== 'upgraded') {
+    if (!shop || !shop.loyalty_enabled || shop.plan === 'basic') {
       return {
         shopId,
         shopName: shop?.name,
@@ -91,7 +91,7 @@ export default defineEventHandler(async (event) => {
       .in('id', uniqueShopIds)
 
     const results = []
-    const eligibleShops = (shopsBatch || []).filter(s => s && s.loyalty_enabled && s.plan === 'upgraded')
+    const eligibleShops = (shopsBatch || []).filter(s => s && s.loyalty_enabled && s.plan !== 'basic')
 
     // Parallelize balance/earned queries instead of sequential (N+1 fix)
     const balanceResults = await Promise.all(
