@@ -74,7 +74,10 @@ const planLabel = computed(() => {
 const countLabel = computed(() => {
   const limit = tierCheck.value.limit
   const label = limit === Infinity || limit === -1 ? '∞' : String(limit)
-  return `${images.value.length} / ${label} images (${planLabel})`
+  // NOTE: .value is required here — planLabel is a ComputedRef; without it the
+  // badge rendered "[object Object]" (template auto-unwrap doesn't apply
+  // inside another computed's body).
+  return `${images.value.length} / ${label} images (${planLabel.value})`
 })
 
 const categoryOptions = [
@@ -280,6 +283,10 @@ async function deleteImage(image: GalleryImage) {
 
 // ─── Lifecycle ────────────────────────────────────────
 onMounted(() => {
+  // Safety net: tier limits/labels depend on the shop store — on a hard
+  // refresh of this page the store may not be populated yet (it would
+  // briefly show Basic-plan limits). Load it if missing.
+  if (!shopStore.currentShop) shopStore.loadCurrentShop()
   if (canManage.value) {
     fetchImages()
   } else {

@@ -75,7 +75,10 @@ const planLabel = computed(() => {
 const countLabel = computed(() => {
   const limit = tierCheck.value.limit
   const label = limit === Infinity || limit === -1 ? '∞' : String(limit)
-  return `${products.value.length} / ${label} products (${planLabel})`
+  // NOTE: .value is required here — planLabel is a ComputedRef; without it the
+  // badge rendered "[object Object]" (template auto-unwrap doesn't apply
+  // inside another computed's body).
+  return `${products.value.length} / ${label} products (${planLabel.value})`
 })
 
 // ─── Fetch products ───────────────────────────────────
@@ -308,6 +311,10 @@ function isLowStock(product: Product): boolean {
 
 // ─── Lifecycle ────────────────────────────────────────
 onMounted(() => {
+  // Safety net: tier limits/labels depend on the shop store — on a hard
+  // refresh of this page the store may not be populated yet (it would
+  // briefly show Basic-plan limits). Load it if missing.
+  if (!shopStore.currentShop) shopStore.loadCurrentShop()
   fetchProducts()
 })
 </script>
