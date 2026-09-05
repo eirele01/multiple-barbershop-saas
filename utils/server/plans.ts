@@ -44,6 +44,22 @@ export function normalizeLimit(value: number | null | undefined): number {
   return Math.max(0, value)
 }
 
+/**
+ * Convert in-memory limits (Infinity = unlimited) into the JSON wire format
+ * (-1 = unlimited). MUST be used before sending limits over HTTP — JSON has
+ * no Infinity, and JSON.stringify(Infinity) silently produces null, which
+ * made unlimited plans render as "null" in the UI.
+ */
+export function toWireLimits(limits: PlanLimits): Record<string, number> {
+  const toWire = (v: number) => (v === Infinity ? -1 : v)
+  return {
+    services: toWire(limits.services),
+    gallery: toWire(limits.gallery),
+    products: toWire(limits.products),
+    staff: toWire(limits.staff),
+  }
+}
+
 /** Type guard: is this a valid raw limits object from the DB? */
 function isRawLimits(raw: unknown): raw is Record<string, number> {
   if (!raw || typeof raw !== 'object') return false

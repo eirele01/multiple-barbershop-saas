@@ -5,7 +5,7 @@
  * Returns normalized plans sorted by sort_order.
  */
 import { useSupabaseAdmin } from '~/server/utils/supabase'
-import { fetchPlans } from '~/utils/server/plans'
+import { fetchPlans, toWireLimits } from '~/utils/server/plans'
 
 export default defineEventHandler(async (event) => {
   const supabase = useSupabaseAdmin()
@@ -31,5 +31,7 @@ export default defineEventHandler(async (event) => {
   const { activeOnly } = getQuery(event)
   const plans = await fetchPlans(supabase, { activeOnly: activeOnly === '1' || activeOnly === 'true' })
 
-  return { plans }
+  // Wire format: -1 = unlimited (Infinity must never be JSON-serialized —
+  // it becomes null and the Tier Maker form would show blank/invalid values).
+  return { plans: plans.map(p => ({ ...p, limits: toWireLimits(p.limits) })) }
 })

@@ -242,7 +242,13 @@ export default defineEventHandler(async (event) => {
               },
             ],
             payment_method_types: paymentMethodTypes,
-            return_url: returnUrl,
+            // Checkout Sessions API: success_url redirects the customer back
+            // after payment, cancel_url when they abandon the checkout.
+            // (NOTE: `return_url` is a Payment-Intents-attach field — PayMongo
+            // silently ignores it on checkout_sessions, which is why the
+            // customer used to be stranded on the "Payment Received!" page.)
+            success_url: returnUrl,
+            cancel_url: `${baseUrl}/admin/billing`,
             reference_number: `${isRenewal ? 'RENEW' : 'UPGRADE'}-${shopId.slice(0, 8)}-${Date.now()}`,
             metadata: {
               shop_id: shopId,

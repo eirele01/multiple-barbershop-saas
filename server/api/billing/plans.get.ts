@@ -6,7 +6,7 @@
  * Auth is OPTIONAL: guests get the same public pricing list.
  */
 import { createClient } from '@supabase/supabase-js'
-import { fetchPlans, formatPlanPrice } from '~/utils/server/plans'
+import { fetchPlans, formatPlanPrice, toWireLimits } from '~/utils/server/plans'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -26,7 +26,9 @@ export default defineEventHandler(async (event) => {
       priceYearly: p.price_yearly,
       priceMonthlyLabel: formatPlanPrice(p.price_monthly),
       priceYearlyLabel: formatPlanPrice(p.price_yearly),
-      limits: p.limits,
+      // Wire format: -1 = unlimited. Sending the in-memory Infinity here
+      // would serialize as null over JSON and break the UI.
+      limits: toWireLimits(p.limits),
       features: p.features,
       is_default: p.is_default,
       sort_order: p.sort_order,

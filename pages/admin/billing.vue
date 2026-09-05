@@ -47,7 +47,9 @@ const isUpgrading = ref(false)
 
 // ─── Feature list builder ──────────────────────────
 function limitText(val: number): string {
-  if (val === Infinity || val === -1) return 'Unlimited'
+  // null/undefined defensively treated as unlimited (an older API serialized
+  // Infinity as null; the wire format is -1 = unlimited).
+  if (val === Infinity || val === -1 || val == null) return 'Unlimited'
   return String(val)
 }
 
@@ -68,11 +70,12 @@ async function fetchPlans() {
     const data = await $fetch('/api/billing/plans') as any
     plans.value = (data.plans || []).map((p: any) => {
       // Tier Maker (plans DB) is the source of truth for limits.
-      // DB convention: -1 = unlimited (JSON can't store Infinity).
+      // Wire convention: -1 = unlimited (JSON can't store Infinity).
+      // A null here means an older API serialized Infinity → treat as unlimited.
       const raw = p.limits || {}
       const limits: Record<string, number> = {}
       for (const k of ['services', 'gallery', 'products', 'staff']) {
-        const v = Number(raw[k])
+        const v = raw[k] === null || raw[k] === undefined ? -1 : Number(raw[k])
         limits[k] = v === -1 ? Infinity : Math.max(0, Number.isFinite(v) ? v : 0)
       }
       return {

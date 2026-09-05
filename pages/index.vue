@@ -114,7 +114,8 @@ const pricingPlans = computed<PricingCard[]>(() => {
     ]
     for (const [key, label] of limitDefs) {
       const v = Number(limits[key])
-      if (v === -1 || !Number.isFinite(v)) feats.push(`Unlimited ${label}s`)
+      // null (legacy serialized Infinity) and -1 both mean unlimited
+      if (limits[key] === null || v === -1 || !Number.isFinite(v)) feats.push(`Unlimited ${label}s`)
       else if (v > 0) feats.push(`Up to ${v} ${label}${v === 1 ? '' : 's'}`)
     }
     for (const f of p.features || []) feats.push(f)
