@@ -19,6 +19,155 @@ useHead({
   ],
 })
 
+// ── Pricing section (dynamic — plans DB / Tier Maker is the source of truth) ──
+const pricingInterval = ref<'monthly' | 'yearly'>('monthly')
+const pricingTrack = ref<HTMLElement | null>(null)
+const pricingIndex = ref(0)
+const pricingOverflow = ref(false)
+const canScrollLeft = ref(false)
+const canScrollRight = ref(false)
+
+function updatePricingScroll() {
+  const el = pricingTrack.value
+  if (!el) return
+  pricingOverflow.value = el.scrollWidth > el.clientWidth + 4
+  canScrollLeft.value = el.scrollLeft > 4
+  canScrollRight.value = el.scrollLeft < el.scrollWidth - el.clientWidth - 4
+  // Active card = the one nearest the track's visual center
+  const center = el.scrollLeft + el.clientWidth / 2
+  let best = 0
+  let bestDist = Infinity
+  Array.from(el.children).forEach((child, i) => {
+    const c = child as HTMLElement
+    const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - center)
+    if (d < bestDist) {
+      bestDist = d
+      best = i
+    }
+  })
+  pricingIndex.value = best
+}
+
+function scrollPricing(dir: -1 | 1) {
+  const el = pricingTrack.value
+  if (!el) return
+  const next = Math.min(Math.max(pricingIndex.value + dir, 0), el.children.length - 1)
+  ;(el.children[next] as HTMLElement | undefined)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+}
+
+function goToPricing(i: number) {
+  const child = pricingTrack.value?.children[i] as HTMLElement | undefined
+  child?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+}
+
+// NOTE: lifecycle hooks must be registered synchronously (before the first
+// top-level await below) or Vue drops them in async setup components.
+const scrollListenerAttached = ref(false)
+function attachPricingListeners() {
+  if (scrollListenerAttached.value || !pricingTrack.value) return
+  pricingTrack.value.addEventListener('scroll', updatePricingScroll, { passive: true })
+  scrollListenerAttached.value = true
+}
+
+onMounted(() => {
+  attachPricingListeners()
+  nextTick(updatePricingScroll)
+  window.addEventListener('resize', updatePricingScroll)
+})
+onBeforeUnmount(() => {
+  pricingTrack.value?.removeEventListener('scroll', updatePricingScroll)
+  window.removeEventListener('resize', updatePricingScroll)
+})
+
+// The track renders only once plans resolve (skeleton → track swap), so
+// (re)attach listeners and measure whenever the plan list first appears.
+// Declared after `pricingPlans` (below) to avoid a TDZ reference.
+
+const { data: plansResponse } = await useFetch('/api/billing/plans')
+
+interface PricingCard {
+  code: string
+  name: string
+  description: string
+  priceMonthly: number
+  priceYearly: number
+  monthlyLabel: string
+  yearlyLabel: string
+  features: string[]
+  recommended: boolean
+}
+
+function formatCentavos(c: number): string {
+  return `₱${(c / 100).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+const pricingPlans = computed<PricingCard[]>(() => {
+  const raw = (plansResponse.value as any)?.plans || []
+  const cards: PricingCard[] = raw.map((p: any) => {
+    const limits = p.limits || {}
+    const feats: string[] = []
+    const limitDefs: [string, string][] = [
+      ['services', 'service'],
+      ['gallery', 'gallery image'],
+      ['products', 'product'],
+      ['staff', 'staff member'],
+    ]
+    for (const [key, label] of limitDefs) {
+      const v = Number(limits[key])
+      // null (legacy serialized Infinity) and -1 both mean unlimited
+      if (limits[key] === null || v === -1 || !Number.isFinite(v)) feats.push(`Unlimited ${label}s`)
+      else if (v > 0) feats.push(`Up to ${v} ${label}${v === 1 ? '' : 's'}`)
+    }
+    for (const f of p.features || []) feats.push(f)
+    return {
+      code: p.code,
+      name: p.name,
+      description: p.description || '',
+      priceMonthly: p.priceMonthly || 0,
+      priceYearly: p.priceYearly || 0,
+      monthlyLabel: p.priceMonthlyLabel || formatCentavos(p.priceMonthly || 0),
+      yearlyLabel: p.priceYearlyLabel || formatCentavos(p.priceYearly || 0),
+      features: feats,
+      recommended: false,
+    }
+  })
+  // "Recommended" = second-highest paid tier (the classic SaaS sweet spot).
+  const paid = cards
+    .filter(c => c.priceMonthly > 0 || c.priceYearly > 0)
+    .sort((a, b) => b.priceMonthly - a.priceMonthly)
+  if (paid.length >= 2) paid[1].recommended = true
+  else if (paid.length === 1) paid[0].recommended = true
+  return cards
+})
+
+// The track renders only once plans resolve (skeleton → track swap), so
+// (re)attach listeners and re-measure whenever the plan list appears.
+watch(pricingPlans, (v) => {
+  if (v.length) {
+    attachPricingListeners()
+    nextTick(updatePricingScroll)
+  }
+}, { immediate: false })
+
+const pricingYearlyBadge = computed<string | null>(() => {
+  let best = 0
+  for (const p of pricingPlans.value) {
+    if (!p.priceMonthly || !p.priceYearly) continue
+    const full = p.priceMonthly * 12
+    if (p.priceYearly < full) best = Math.max(best, Math.round(((full - p.priceYearly) / full) * 100))
+  }
+  return best > 0 ? `Save ${best}%` : null
+})
+
+function pricingDisplayPrice(plan: PricingCard): { amount: string; note: string } {
+  const isFree = !plan.priceMonthly && !plan.priceYearly
+  if (isFree) return { amount: 'Free', note: 'forever' }
+  if (pricingInterval.value === 'yearly' && plan.priceYearly) {
+    return { amount: plan.yearlyLabel, note: 'per year' }
+  }
+  return { amount: plan.monthlyLabel, note: 'per month' }
+}
+
 const { data: shopsResponse, error: shopsError } = await useFetch('/api/shops')
 // allShops — alphabetical (API order); feeds the search combobox
 const allShops = computed(() => (shopsResponse.value as any)?.data || [])
@@ -278,115 +427,126 @@ function goToTop() {
       </div>
     </section>
 
-    <!-- Pricing Section -->
+    <!-- Pricing Section (dynamic — plans DB / Tier Maker) -->
     <section id="pricing" class="bg-[var(--color-pure-white)] px-4 py-20">
-      <div class="mx-auto max-w-4xl">
-        <h2 class="mb-12 text-center text-[var(--color-deep)]">
+      <div class="mx-auto max-w-6xl">
+        <h2 class="text-center text-[var(--color-deep)]">
           Simple, Transparent Pricing
         </h2>
-        <div class="grid gap-8 md:grid-cols-2">
-          <!-- Basic Plan -->
-          <div class="card-design p-8 flex flex-col justify-between">
-            <div>
-            <p class="text-sm font-semibold uppercase tracking-wider text-[var(--color-titanium)]">Basic</p>
-            <div class="mt-4 flex items-baseline gap-1">
-              <span class="text-4xl font-bold text-[var(--color-deep)]">Free</span>
-              <span class="text-[var(--color-titanium)]">forever</span>
-            </div>
-            <p class="mt-2 text-sm text-[var(--color-titanium)]">
-              Everything you need to get started.
-            </p>
-            <ul class="mt-6 space-y-3">
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Unlimited bookings
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Shop landing page
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Manual QR payment
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Up to 10 services
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Up to 5 staff members
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Up to 20 gallery images
-              </li>
-            </ul>
-            </div>
-            <NuxtLink
-              to="/register"
-              class="btn-design mt-8 block w-full rounded-btn border border-[var(--color-deep)] py-3 text-center text-sm font-semibold text-[var(--color-deep)] transition-colors hover:bg-[var(--color-deep)] hover:text-white"
+
+        <!-- Billing cycle toggle -->
+        <div class="mt-6 flex items-center justify-center">
+          <div class="inline-flex items-center rounded-full bg-[var(--color-silver)]/15 p-1">
+            <button
+              class="rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
+              :class="pricingInterval === 'monthly' ? 'bg-[var(--color-pure-white)] text-[var(--color-deep)] shadow-sm' : 'text-[var(--color-titanium)]'"
+              @click="pricingInterval = 'monthly'"
             >
-              Start Free
-            </NuxtLink>
+              Monthly
+            </button>
+            <button
+              class="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
+              :class="pricingInterval === 'yearly' ? 'bg-[var(--color-pure-white)] text-[var(--color-deep)] shadow-sm' : 'text-[var(--color-titanium)]'"
+              @click="pricingInterval = 'yearly'"
+            >
+              Yearly
+              <span
+                v-if="pricingYearlyBadge"
+                class="rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                :class="pricingInterval === 'yearly' ? 'bg-[var(--color-success)] text-white' : 'bg-[var(--color-success)]/15 text-[var(--color-success)]'"
+              >
+                {{ pricingYearlyBadge }}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Loading skeleton -->
+        <div v-if="!pricingPlans.length" class="mt-12 grid gap-8 md:grid-cols-3">
+          <div v-for="n in 3" :key="n" class="card-design p-8">
+            <div class="mx-auto h-5 w-20 animate-pulse rounded bg-[var(--color-silver)]/10" />
+            <div class="mx-auto mt-4 h-9 w-24 animate-pulse rounded bg-[var(--color-silver)]/10" />
+            <div class="mt-6 space-y-3">
+              <div v-for="i in 5" :key="i" class="h-4 w-full animate-pulse rounded bg-[var(--color-silver)]/10" />
+            </div>
+          </div>
+        </div>
+        <!-- Plans carousel / grid (Apple-style snap track) -->
+        <div v-else class="relative mt-12">
+          <!-- Arrows (only when the track overflows) -->
+          <button
+            v-if="pricingOverflow"
+            class="absolute -left-4 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--color-pure-white)] shadow-md ring-1 ring-[var(--color-silver)]/40 transition hover:bg-[var(--color-silver)]/10 md:flex"
+            :class="canScrollLeft ? 'opacity-100' : 'pointer-events-none opacity-30'"
+            aria-label="Previous plans"
+            @click="scrollPricing(-1)"
+          >
+            <Icon name="lucide:chevron-left" class="h-5 w-5 text-[var(--color-deep)]" />
+          </button>
+          <button
+            v-if="pricingOverflow"
+            class="absolute -right-4 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--color-pure-white)] shadow-md ring-1 ring-[var(--color-silver)]/40 transition hover:bg-[var(--color-silver)]/10 md:flex"
+            :class="canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-30'"
+            aria-label="Next plans"
+            @click="scrollPricing(1)"
+          >
+            <Icon name="lucide:chevron-right" class="h-5 w-5 text-[var(--color-deep)]" />
+          </button>
+
+          <!-- Snap track: renders like a grid when plans fit, swipeable carousel when they don't -->
+          <div
+            ref="pricingTrack"
+            class="no-scrollbar flex snap-x snap-mandatory justify-start gap-6 overflow-x-auto pb-2 md:justify-center py-4"
+          >
+            <div
+              v-for="plan in pricingPlans"
+              :key="plan.code"
+              class="card-design relative flex w-[85vw] max-w-[360px] flex-shrink-0 snap-center flex-col p-8 sm:w-[340px]"
+            >
+              <!-- Recommended badge -->
+              <div
+                v-if="plan.recommended"
+                class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--color-deep)] px-3 py-1 text-xs font-medium text-white"
+              >
+                Recommended
+              </div>
+
+              <h3 class="text-center text-lg font-bold text-[var(--color-deep)]">{{ plan.name }}</h3>
+              <div class="mt-3 text-center">
+                <span class="text-3xl font-bold text-[var(--color-deep)]">{{ pricingDisplayPrice(plan).amount }}</span>
+                <span class="ml-1 text-xs text-[var(--color-titanium)]">{{ pricingDisplayPrice(plan).note }}</span>
+              </div>
+              <p class="mt-2 text-center text-sm text-[var(--color-titanium)]">{{ plan.description }}</p>
+
+              <ul class="mt-6 flex-1 space-y-3">
+                <li v-for="f in plan.features" :key="f" class="flex items-start gap-2 text-sm">
+                  <Icon name="lucide:check" class="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-success)]" />
+                  <span class="text-[var(--color-deep)]">{{ f }}</span>
+                </li>
+              </ul>
+
+              <NuxtLink
+                to="/register"
+                class="btn-design mt-8 block w-full rounded-btn py-3 text-center text-sm font-semibold transition-colors"
+                :class="plan.recommended
+                  ? 'bg-[var(--color-deep)] text-white hover:bg-[var(--color-titanium)]'
+                  : 'border border-[var(--color-deep)] text-[var(--color-deep)] hover:bg-[var(--color-deep)] hover:text-white'"
+              >
+                {{ plan.priceMonthly > 0 || plan.priceYearly > 0 ? 'Get Started' : 'Start Free' }}
+              </NuxtLink>
+            </div>
           </div>
 
-          <!-- Upgraded Plan -->
-          <div class="relative card-design border-2 border-[var(--color-deep)] p-8 flex flex-col justify-between">
-            <div>
-            <div class="absolute -top-3 right-4">
-              <span class="badge-pill bg-[var(--color-deep)] text-xs font-semibold text-white">
-                Recommended
-              </span>
-            </div>
-            <p class="text-sm font-semibold uppercase tracking-wider text-[var(--color-info)]">Upgraded</p>
-            <div class="mt-4 flex items-baseline gap-1">
-              <span class="text-4xl font-bold text-[var(--color-deep)]">Monthly</span>
-            </div>
-            <p class="mt-2 text-sm text-[var(--color-titanium)]">
-              Contact us for pricing
-            </p>
-            <ul class="mt-6 space-y-3">
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Everything in Basic
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Unlimited services, gallery, products, staff
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                PayMongo integration
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Email notifications
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Loyalty program
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Advanced analytics
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Custom domain
-              </li>
-              <li class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:check" class="h-4 w-4 text-[var(--color-success)]" />
-                Priority support
-              </li>
-            </ul>
-            </div>
-            <NuxtLink
-              to="/register"
-              class="btn-design mt-8 block w-full rounded-btn bg-[var(--color-deep)] py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-[var(--color-titanium)]"
-            >
-              Upgrade Now
-            </NuxtLink>
+          <!-- Dot indicators (only when the track overflows) -->
+          <div v-if="pricingOverflow" class="mt-6 flex items-center justify-center gap-2">
+            <button
+              v-for="(plan, i) in pricingPlans"
+              :key="`dot-${plan.code}`"
+              class="h-2 rounded-full transition-all"
+              :class="pricingIndex === i ? 'w-6 bg-[var(--color-deep)]' : 'w-2 bg-[var(--color-silver)]/50 hover:bg-[var(--color-silver)]'"
+              :aria-label="`Go to ${plan.name}`"
+              @click="goToPricing(i)"
+            />
           </div>
         </div>
       </div>
@@ -527,3 +687,14 @@ function goToTop() {
     </footer>
   </div>
 </template>
+
+<style scoped>
+/* Hide the carousel scrollbar while keeping it scrollable (all browsers) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+</style>

@@ -60,18 +60,24 @@ const canManage = computed(() => {
 })
 
 const tierCheck = computed(() => {
-  const plan = shopStore.plan || 'basic'
+  const plan = shopStore.effectivePlan
   return checkTierLimit(plan, 'gallery', images.value.length)
 })
 
 const isAtLimit = computed(() => !tierCheck.value.allowed)
 
+const planLabel = computed(() => {
+  const plan = shopStore.effectivePlan
+  return plan === 'basic' ? 'Basic' : plan.charAt(0).toUpperCase() + plan.slice(1)
+})
+
 const countLabel = computed(() => {
-  const plan = shopStore.plan || 'basic'
-  const isBasic = plan === 'basic'
-  const limit = isBasic ? '20' : '∞'
-  const planLabel = isBasic ? 'Basic' : 'Upgraded'
-  return `${images.value.length} / ${limit} images (${planLabel})`
+  const limit = tierCheck.value.limit
+  const label = limit === Infinity || limit === -1 ? '∞' : String(limit)
+  // NOTE: .value is required here — planLabel is a ComputedRef; without it the
+  // badge rendered "[object Object]" (template auto-unwrap doesn't apply
+  // inside another computed's body).
+  return `${images.value.length} / ${label} images (${planLabel.value})`
 })
 
 const categoryOptions = [
@@ -277,6 +283,10 @@ async function deleteImage(image: GalleryImage) {
 
 // ─── Lifecycle ────────────────────────────────────────
 onMounted(() => {
+  // Safety net: tier limits/labels depend on the shop store — on a hard
+  // refresh of this page the store may not be populated yet (it would
+  // briefly show Basic-plan limits). Load it if missing.
+  if (!shopStore.currentShop) shopStore.loadCurrentShop()
   if (canManage.value) {
     fetchImages()
   } else {

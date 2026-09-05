@@ -57,8 +57,12 @@ const form = ref({
 
 // ─── Tier limits ──────────────────────────────────
 const tierLimit = computed(() => {
-  if (shopStore.isUpgradedPlan) return Infinity
+  if (shopStore.effectivePlan !== 'basic') return Infinity
   return TIER_LIMITS.basic.services
+})
+const planLabel = computed(() => {
+  const plan = shopStore.effectivePlan
+  return plan === 'basic' ? 'Basic' : plan.charAt(0).toUpperCase() + plan.slice(1)
 })
 const serviceCount = computed(() => services.value.length)
 const isAtLimit = computed(() => serviceCount.value >= tierLimit.value)
@@ -356,12 +360,12 @@ onMounted(async () => {
           class="badge-pill text-[10px]"
           :class="isAtLimit
             ? 'bg-[var(--color-danger)]/10 text-[var(--color-danger)]'
-            : shopStore.isUpgradedPlan
+            : shopStore.effectivePlan !== 'basic'
               ? 'bg-[var(--color-info)]/10 text-[var(--color-info)]'
               : 'bg-[var(--color-silver)]/30 text-[var(--color-titanium)]'"
         >
           {{ serviceCount }} / {{ tierLimit === Infinity ? '∞' : tierLimit }} services
-          {{ shopStore.isUpgradedPlan ? '(Upgraded)' : '(Basic)' }}
+          ({{ planLabel }})
         </span>
         <button
           v-if="canManage"
@@ -805,7 +809,7 @@ onMounted(async () => {
       :current-count="serviceCount"
       :limit="tierLimit === Infinity ? 10 : (tierLimit as number)"
       @close="showUpgradePrompt = false"
-      @upgrade="showUpgradePrompt = false; navigateTo('/admin/settings')"
+      @upgrade="showUpgradePrompt = false; navigateTo('/admin/billing')"
     />
 
     <!-- ─── Confirm Dialog ─────────────────────────── -->

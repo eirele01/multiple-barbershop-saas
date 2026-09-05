@@ -61,18 +61,24 @@ const canManage = computed(() => {
 const canDelete = computed(() => authStore.role === 'admin')
 
 const tierCheck = computed(() => {
-  const plan = shopStore.plan || 'basic'
+  const plan = shopStore.effectivePlan
   return checkTierLimit(plan, 'products', products.value.length)
 })
 
 const isAtLimit = computed(() => !tierCheck.value.allowed)
 
+const planLabel = computed(() => {
+  const plan = shopStore.effectivePlan
+  return plan === 'basic' ? 'Basic' : plan.charAt(0).toUpperCase() + plan.slice(1)
+})
+
 const countLabel = computed(() => {
-  const plan = shopStore.plan || 'basic'
-  const isBasic = plan === 'basic'
-  const limit = isBasic ? '10' : '∞'
-  const planLabel = isBasic ? 'Basic' : 'Upgraded'
-  return `${products.value.length} / ${limit} products (${planLabel})`
+  const limit = tierCheck.value.limit
+  const label = limit === Infinity || limit === -1 ? '∞' : String(limit)
+  // NOTE: .value is required here — planLabel is a ComputedRef; without it the
+  // badge rendered "[object Object]" (template auto-unwrap doesn't apply
+  // inside another computed's body).
+  return `${products.value.length} / ${label} products (${planLabel.value})`
 })
 
 // ─── Fetch products ───────────────────────────────────
@@ -305,6 +311,10 @@ function isLowStock(product: Product): boolean {
 
 // ─── Lifecycle ────────────────────────────────────────
 onMounted(() => {
+  // Safety net: tier limits/labels depend on the shop store — on a hard
+  // refresh of this page the store may not be populated yet (it would
+  // briefly show Basic-plan limits). Load it if missing.
+  if (!shopStore.currentShop) shopStore.loadCurrentShop()
   fetchProducts()
 })
 </script>

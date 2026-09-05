@@ -10,6 +10,9 @@ dist
 .env.local
 .env.*.local
 
+# AI tool artifacts
+.dbg-list.html
+
 # Supabase
 supabase/.temp
 supabase/storage

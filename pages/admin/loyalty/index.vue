@@ -9,8 +9,8 @@ definePageMeta({
 
 const shopStore = useShopStore()
 
-// If not upgraded, redirect to settings with upgrade prompt
-if (!shopStore.isUpgradedPlan) {
+// If not on a paid plan, redirect to settings with upgrade prompt
+if (shopStore.effectivePlan === 'basic') {
   navigateTo('/admin/settings', { redirectCode: 302 })
 } else {
   navigateTo('/admin/loyalty/settings', { redirectCode: 302 })

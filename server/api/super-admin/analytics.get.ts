@@ -166,7 +166,7 @@ export default defineEventHandler(async (event) => {
           // Count shops created before the end of this month
           const shopCreated = new Date(shop.created_at)
           if (shopCreated < monthEnd) {
-            if (shop.plan === 'upgraded') {
+            if (shop.plan !== 'basic') {
               upgradedCount++
             } else {
               basicCount++
@@ -185,7 +185,7 @@ export default defineEventHandler(async (event) => {
       .reduce((sum, b) => sum + (Number(b.payment_amount) || 0), 0) || 0
 
     const totalShops = allShops?.length || 0
-    const upgradedShops = allShops?.filter(s => s.plan === 'upgraded').length || 0
+    const upgradedShops = allShops?.filter(s => s.plan !== 'basic').length || 0
 
     const avgBookingsPerShop = totalShops > 0 ? Math.round((totalBookings / totalShops) * 100) / 100 : 0
     const conversionRate = totalShops > 0 ? Math.round((upgradedShops / totalShops) * 10000) / 100 : 0

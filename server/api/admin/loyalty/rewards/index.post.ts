@@ -57,8 +57,8 @@ export default defineEventHandler(async (event) => {
     .eq('id', userData.shop_id)
     .single()
 
-  if (!shop || shop.plan !== 'upgraded') {
-    throw createError({ statusCode: 403, statusMessage: 'Loyalty features require the Upgraded plan' })
+  if (!shop || shop.plan === 'basic') {
+    throw createError({ statusCode: 403, statusMessage: 'Loyalty features require a paid plan' })
   }
 
   // Validate body

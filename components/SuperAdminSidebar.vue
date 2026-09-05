@@ -57,6 +57,11 @@ const navGroups = [
         icon: 'lucide:credit-card',
         to: '/super-admin/subscriptions',
       },
+      {
+        label: 'Plans',
+        icon: 'lucide:layers',
+        to: '/super-admin/plans',
+      },
     ],
   },
   {

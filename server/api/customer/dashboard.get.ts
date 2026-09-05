@@ -102,7 +102,7 @@ export default defineEventHandler(async (event) => {
       .in('id', uniqueShopIds)
 
     // Parallelize balance queries instead of sequential (N+1 fix)
-    const eligibleShops = (shops || []).filter(s => s.loyalty_enabled && s.plan === 'upgraded')
+    const eligibleShops = (shops || []).filter(s => s.loyalty_enabled && s.plan !== 'basic')
     const balances = await Promise.all(
       eligibleShops.map(s => getCustomerBalance(s.id, authUser.id))
     )

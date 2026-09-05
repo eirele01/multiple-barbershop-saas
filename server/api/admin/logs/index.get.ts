@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
     .eq('id', shopId)
     .single()
 
-  const isUpgraded = shopData?.plan === 'upgraded'
+  const isUpgraded = shopData?.plan !== 'basic'
   const maxLookbackDays = isUpgraded ? 90 : 7
 
   // ── Parse query params ──

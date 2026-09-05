@@ -8,6 +8,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { getPlanLimits, resolveShopPlan } from '~/utils/server/plans'
 
 const createServiceSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
@@ -83,20 +84,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Failed to check service count' })
   }
 
-  // Get shop plan for tier check
-  const { data: shopData } = await supabaseAdmin
-    .from('shops')
-    .select('plan')
-    .eq('id', userProfile.shop_id)
-    .single()
+  // Get shop plan for tier check — effective (honors expiry + grace)
+  const shopPlan = await resolveShopPlan(supabaseAdmin, userProfile.shop_id)
+  const plan = shopPlan?.effectivePlan || 'basic'
+  const planLimits = await getPlanLimits(supabaseAdmin, plan)
+  const SERVICE_LIMIT = planLimits.services
 
-  const plan = shopData?.plan || 'basic'
-  const SERVICE_LIMIT = plan === 'upgraded' ? Infinity : 10
-
-  if ((currentCount || 0) >= SERVICE_LIMIT) {
+  if (SERVICE_LIMIT !== Infinity && (currentCount || 0) >= SERVICE_LIMIT) {
     throw createError({
       statusCode: 403,
-      statusMessage: `You've reached the maximum of ${SERVICE_LIMIT} services on the ${plan === 'upgraded' ? 'Upgraded' : 'Basic'} plan. Upgrade for unlimited services.`,
+      statusMessage: `You've reached the maximum of ${SERVICE_LIMIT} services on your current plan. Upgrade to a higher plan to add more.`,
       data: { currentCount, limit: SERVICE_LIMIT, plan },
     })
   }

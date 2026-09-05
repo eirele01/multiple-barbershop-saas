@@ -19,7 +19,7 @@ const shopStore = useShopStore()
 const toast = useToast()
 const { confirm, ConfirmDialogComponent } = useConfirm()
 
-const isUpgraded = computed(() => shopStore.isUpgradedPlan)
+const isUpgraded = computed(() => shopStore.effectivePlan !== 'basic')
 
 // ─── State ────────────────────────────────────────
 const isLoading = ref(true)

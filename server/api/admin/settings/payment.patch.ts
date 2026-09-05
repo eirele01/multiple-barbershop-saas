@@ -15,6 +15,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { encrypt } from '~/utils/server/encryption'
+import { resolveShopPlan } from '~/utils/server/plans'
 
 const MASKED_SECRET_KEY = 'sk_***...***'
 const MASKED_WEBHOOK_SECRET = 'whsec_***'
@@ -96,8 +97,11 @@ export default defineEventHandler(async (event) => {
   const effectivePaymongoEnabled = parsed.data.paymongo_enabled ?? shop.paymongo_enabled
   const effectiveManualEnabled = parsed.data.manual_payment_enabled ?? shop.manual_payment_enabled
 
-  // ENFORCEMENT: At least one payment method must be enabled for Upgraded plan
-  if (shop.plan === 'upgraded' && !effectivePaymongoEnabled && !effectiveManualEnabled) {
+  // ENFORCEMENT: At least one payment method must be enabled for paid plans
+  // (uses the effective plan — expired-beyond-grace shops drop back to basic)
+  const shopPlan = await resolveShopPlan(supabaseAdmin, userProfile.shop_id)
+  const effectivePlanCode = shopPlan?.effectivePlan || 'basic'
+  if (effectivePlanCode !== 'basic' && !effectivePaymongoEnabled && !effectiveManualEnabled) {
     throw createError({
       statusCode: 422,
       statusMessage: 'At least one payment method must be enabled.',

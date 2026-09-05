@@ -240,6 +240,12 @@ const navGroups = computed(() => {
       label: 'System',
       items: [
         {
+          label: 'Plan & Billing',
+          icon: 'lucide:credit-card',
+          to: '/admin/billing',
+          roles: ['admin'],
+        },
+        {
           label: 'Settings',
           icon: 'lucide:settings',
           to: '/admin/settings',
@@ -255,7 +261,7 @@ const navGroups = computed(() => {
       ...group,
       items: group.items.filter((item: any) => {
         if (item.roles && !item.roles.includes(role!)) return false
-        if (item.upgradedOnly && !shopStore.isUpgradedPlan) return false
+        if (item.upgradedOnly && shopStore.effectivePlan === 'basic') return false
         return true
       }),
     }))
@@ -323,7 +329,7 @@ function childBadge(child: any): number {
             {{ shopStore.name || 'My Shop' }}
           </p>
           <div class="mt-1 flex items-center gap-2">
-            <PlanBadge :plan="shopStore.isUpgradedPlan ? 'upgraded' : 'basic'" />
+            <PlanBadge :plan="shopStore.effectivePlan" />
             <span class="relative flex h-2 w-2">
               <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-success)] opacity-75" />
               <span class="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-success)]" />

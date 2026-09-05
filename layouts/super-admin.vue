@@ -26,6 +26,7 @@ const breadcrumbs = computed(() => {
     '/super-admin/shops': 'Shops',
     '/super-admin/owners': 'Owners',
     '/super-admin/subscriptions': 'Subscriptions',
+    '/super-admin/plans': 'Plans',
     '/super-admin/analytics': 'Analytics',
     '/super-admin/settings': 'Settings',
   }

@@ -13,11 +13,14 @@ type TierLimitResource = 'services' | 'gallery' | 'products' | 'staff'
  * @returns TierLimitCheck with allowed status and message
  */
 export function checkTierLimit(
-  plan: SubscriptionPlan,
+  plan: SubscriptionPlan | string,
   resource: TierLimitResource,
   currentCount: number
 ): TierLimitCheck {
-  const limits = TIER_LIMITS[plan]
+  // Dynamic plans (Tier Maker) may add codes not present in the static map.
+  // Fall back to Basic limits so nothing crashes for unknown/custom plans;
+  // server-side enforcement uses the DB `plans` table via getPlanLimits().
+  const limits = TIER_LIMITS[plan as SubscriptionPlan] ?? TIER_LIMITS.basic
   const limit = limits[resource]
 
   // Upgraded plan has no limits
@@ -54,13 +57,13 @@ export function checkTierLimit(
  */
 function getLimitMessage(resource: TierLimitResource, limit: number): string {
   const resourceNames: Record<TierLimitResource, string> = {
-    services: `You've reached the maximum of ${limit} services on the Basic plan`,
-    gallery: `You've reached the maximum of ${limit} gallery images on the Basic plan`,
-    products: `You've reached the maximum of ${limit} products on the Basic plan`,
-    staff: `You've reached the maximum of ${limit} staff members on the Basic plan`,
+    services: `services`,
+    gallery: `gallery images`,
+    products: `products`,
+    staff: `staff members`,
   }
 
-  return `${resourceNames[resource]}. Upgrade to the Upgraded plan for unlimited ${resource}!`
+  return `You've reached the maximum of ${limit} ${resourceNames[resource]} on your current plan. Upgrade to a higher plan for more!`
 }
 
 /**
@@ -68,17 +71,18 @@ function getLimitMessage(resource: TierLimitResource, limit: number): string {
  */
 function getRemainingMessage(resource: TierLimitResource, remaining: number): string {
   if (remaining <= 2) {
-    return `You can add ${remaining} more ${resource} on the Basic plan. Consider upgrading for unlimited.`
+    return `You can add ${remaining} more ${resource} on your current plan. Consider upgrading for more.`
   }
   return ''
 }
 
 /**
- * Check if an upgraded-only feature is accessible.
- * Upgraded-only features: PayMongo, Email Notifications, Loyalty Program
+ * Check if a premium-only feature is accessible.
+ * Premium features: PayMongo, Email Notifications, Loyalty Program.
+ * Any paid plan qualifies — 'basic' is the canonical free/default plan code.
  */
-export function isUpgradedFeatureAccessible(plan: SubscriptionPlan): boolean {
-  return plan === 'upgraded'
+export function isUpgradedFeatureAccessible(plan: SubscriptionPlan | string): boolean {
+  return plan !== 'basic'
 }
 
 /**

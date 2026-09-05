@@ -291,7 +291,7 @@ const planGrowthChartData = computed(() => ({
       pointRadius: 3,
     },
     {
-      label: 'Upgraded',
+      label: 'Paid',
       data: planGrowth.value.upgraded,
       borderColor: '#3b82f6',
       backgroundColor: 'rgba(59, 130, 246, 0.15)',

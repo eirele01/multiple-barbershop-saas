@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Verify PayMongo is enabled and on upgraded plan
-  if (shop.plan !== 'upgraded' || !shop.paymongo_enabled || !shop.paymongo_secret_key) {
+  if (shop.plan === 'basic' || !shop.paymongo_enabled || !shop.paymongo_secret_key) {
     throw createError({ statusCode: 403, statusMessage: 'PayMongo is not enabled for this shop' })
   }
 
@@ -137,14 +137,16 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // ── Step 5: Build return URL (Checkout Sessions uses a single return_url) ──
+  // ── Step 5: Build redirect URLs (Checkout Sessions: success_url + cancel_url) ──
   const baseUrl = getRequestURL(event).origin
   const returnUrl = `${baseUrl}/shop/${slug}/book/payment-success?bookingRef=${encodeURIComponent(bookingRef)}&bookingId=${encodeURIComponent(bookingId)}`
+  const cancelUrl = `${baseUrl}/shop/${slug}/book`
 
   // ── Step 6: POST to PayMongo /v1/checkout_sessions ──
   //
-  // Checkout Sessions API auto-redirects the customer after payment,
-  // unlike the older /v1/links API which only shows a "Return to merchant" button.
+  // Checkout Sessions API auto-redirects the customer to success_url after
+  // payment (or cancel_url if they abandon), unlike the older /v1/links API
+  // which only shows a "Return to merchant" button.
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), PAYMONGO_TIMEOUT_MS)
@@ -168,7 +170,8 @@ export default defineEventHandler(async (event) => {
               },
             ],
             payment_method_types: paymentMethodAllowed,
-            return_url: returnUrl,
+            success_url: returnUrl,
+            cancel_url: cancelUrl,
             reference_number: bookingRef,
             metadata: {
               booking_id: bookingId,

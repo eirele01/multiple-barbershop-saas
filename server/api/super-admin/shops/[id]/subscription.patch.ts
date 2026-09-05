@@ -2,13 +2,15 @@
  * PATCH /api/super-admin/shops/[id]/subscription
  *
  * Change shop subscription plan.
- * Body: { plan: 'basic' | 'upgraded', plan_status?: string, plan_end_date?: string }
+ * Body: { plan: string (plan code), plan_status?: string, plan_end_date?: string }
+ * Supports any plan code defined in the `plans` table (Tier Maker).
  */
 import { useSupabaseAdmin } from '~/server/utils/supabase'
 import { z } from 'zod'
+import { computePlanEndDate } from '~/utils/server/plans'
 
 const subscriptionSchema = z.object({
-  plan: z.enum(['basic', 'upgraded']),
+  plan: z.string().min(2).max(40).regex(/^[a-z0-9_]+$/, 'invalid plan code'),
   plan_status: z.enum(['active', 'inactive', 'trial']).optional(),
   plan_end_date: z.string().optional(),
 })
@@ -56,7 +58,7 @@ export default defineEventHandler(async (event) => {
     // ── Get current shop data ──
     const { data: shop, error: shopError } = await supabase
       .from('shops')
-      .select('id, name, plan, plan_status, plan_end_date')
+      .select('id, name, plan, plan_status, plan_end_date, billing_interval')
       .eq('id', shopId)
       .single()
 
@@ -69,7 +71,20 @@ export default defineEventHandler(async (event) => {
     // ── Build update payload ──
     const updatePayload: Record<string, unknown> = { plan: newPlan }
     if (plan_status) updatePayload.plan_status = plan_status
-    if (plan_end_date) updatePayload.plan_end_date = plan_end_date
+
+    // ── End date logic ──
+    // A PAID plan without an end date never expires (silent "no-expiry" grant)
+    // — surprising for the shop owner AND the platform (paid plan, no renewal).
+    // Default a paid grant to now + the shop's billing interval. Explicit
+    // plan_end_date always wins. Free plans keep null (no expiry by design).
+    const billingInterval = (shop.billing_interval === 'yearly' ? 'yearly' : 'monthly') as 'monthly' | 'yearly'
+    if (plan_end_date) {
+      updatePayload.plan_end_date = plan_end_date
+    } else if (newPlan !== 'basic') {
+      updatePayload.plan_end_date = computePlanEndDate(new Date(), billingInterval).toISOString()
+    } else {
+      updatePayload.plan_end_date = null
+    }
 
     // ── Update shop subscription ──
     const { error: updateError } = await supabase
@@ -82,8 +97,29 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 500, statusMessage: 'Failed to update subscription' })
     }
 
+    // ── Append billing history row ──
+    // Without this, a super-admin change leaves the shop's newest
+    // upgrade_sessions row pointing at a DIFFERENT plan than the shop is on,
+    // which makes the billing page's stale-activation banner misfire — and
+    // "Retry Activation" would re-apply the old PAID plan without payment.
+    try {
+      await supabase.from('upgrade_sessions').insert({
+        shop_id: shopId,
+        paymongo_session_id: null, // admin grant — no checkout session
+        status: 'applied',
+        amount: 0,
+        from_plan: oldPlan || 'basic',
+        to_plan: newPlan,
+        billing_interval: (updatePayload.plan_end_date && newPlan !== 'basic')
+          ? (shop.billing_interval === 'yearly' ? 'yearly' : 'monthly')
+          : 'monthly',
+      })
+    } catch (historyError) {
+      console.warn('[SUPER-ADMIN SUBSCRIPTION] history row skipped:', historyError)
+    }
+
     // ── Log to activity_logs ──
-    const action = newPlan === 'upgraded' ? 'shop.upgraded' : 'shop.downgraded'
+    const action = newPlan !== 'basic' ? 'shop.upgraded' : 'shop.downgraded'
     await supabase.from('activity_logs').insert({
       shop_id: shopId,
       user_id: user.id,

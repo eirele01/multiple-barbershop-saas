@@ -12,11 +12,22 @@ definePageMeta({
 const toast = useToast()
 
 // ─── Filters ──────────────────────────────────────────
-const planFilter = ref<'all' | 'basic' | 'upgraded'>('all')
+const planFilter = ref<string>('all')
 const statusFilter = ref<'all' | 'active' | 'suspended'>('all')
 const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = 10
+
+// Dynamic plan list (Tier Maker is the source of truth)
+const planOptions = ref<string[]>(['basic', 'upgraded'])
+async function fetchPlanOptions() {
+  try {
+    const data = await $fetch('/api/billing/plans') as any
+    planOptions.value = (data.plans || []).map((p: any) => p.code)
+  } catch (e) {
+    console.error('Failed to load plan filter options:', e)
+  }
+}
 
 // ─── Data ─────────────────────────────────────────────
 const isLoading = ref(true)
@@ -77,6 +88,7 @@ watch(currentPage, () => {
 
 onMounted(() => {
   fetchShops()
+  fetchPlanOptions()
 })
 
 onUnmounted(() => {
@@ -122,7 +134,7 @@ function formatDate(dateStr: string | null): string {
           <span class="text-xs font-medium text-[var(--color-titanium)]">Plan:</span>
           <div class="flex rounded-input border border-[var(--color-silver)]/30 p-0.5">
             <button
-              v-for="option in (['all', 'basic', 'upgraded'] as const)"
+              v-for="option in ['all', ...planOptions]"
               :key="option"
               class="rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors"
               :class="
@@ -132,7 +144,7 @@ function formatDate(dateStr: string | null): string {
               "
               @click="planFilter = option"
             >
-              {{ option.charAt(0).toUpperCase() + option.slice(1) }}
+              {{ option === 'all' ? 'All' : option.charAt(0).toUpperCase() + option.slice(1) }}
             </button>
           </div>
         </div>
