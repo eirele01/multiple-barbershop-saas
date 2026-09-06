@@ -21,7 +21,7 @@ export async function geocodeAddress(address: {
 
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'BarbershopSaaS/1.0 (https://yourdomain.com)',
+      'User-Agent': 'ReservationPH/1.0 (https://reservationph.com)',
     },
   })
 

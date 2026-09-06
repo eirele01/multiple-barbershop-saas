@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * /shop/[slug] — Public Shop Landing Page
- * Premium barbershop landing page with all improvements:
+ * Premium business landing page with all improvements:
  *
  * Bug Fixes: Sticky nav visibility, section fade fallback, merged onMounted, proper routing
  * Mobile: Responsive hero, services grid, team scroll, gallery masonry, floating CTA, touch targets
@@ -346,7 +346,7 @@ function toggleReviewExpand(id: string) {
 const shareCopied = ref(false)
 async function shareShop() {
   const url = window.location.href
-  const text = `Check out ${shop.value?.name} on Barbershop!`
+  const text = `Check out ${shop.value?.name} on Reservation PH!`
   if (navigator.share) {
     try { await navigator.share({ title: shop.value?.name, text, url }) } catch {}
   } else {
@@ -509,10 +509,10 @@ function scrollTeam(direction: 'left' | 'right') {
 watch(shop, (s) => {
   if (!s) return
   useHead({
-    title: `${s.name} — Barbershop`,
+    title: `${s.name}`,
     meta: [
-      { name: 'description', content: s.description || `Book your appointment at ${s.name}. Professional barber services in ${s.address_city || 'the Philippines'}.` },
-      { property: 'og:title', content: `${s.name} — Barbershop` },
+      { name: 'description', content: s.description || `Book your appointment at ${s.name} in ${s.address_city || 'the Philippines'}.` },
+      { property: 'og:title', content: `${s.name}` },
       { property: 'og:description', content: s.description || `Book your appointment at ${s.name}.` },
       { property: 'og:type', content: 'website' },
       { property: 'og:image', content: s.cover_image_url || s.logo_url || '' },
@@ -521,6 +521,11 @@ watch(shop, (s) => {
       { name: 'twitter:title', content: s.name },
       { name: 'twitter:description', content: s.description || `Book your appointment at ${s.name}.` },
       { name: 'twitter:image', content: s.cover_image_url || s.logo_url || '' },
+    ],
+    link: [
+      { rel: 'icon', type: 'image/png', href: s.logo_url || '/favicon-96x96.png' },
+      { rel: 'icon', type: 'image/svg+xml', href: s.logo_url || '/favicon.svg' },
+      { rel: 'apple-touch-icon', sizes: '180x180', href: s.logo_url || '/apple-touch-icon.png' },
     ],
     script: [
       {
@@ -614,7 +619,7 @@ const currentDayName = computed(() => {
     <div v-else-if="!shop" class="flex min-h-screen items-center justify-center bg-[var(--page-bg)] px-4">
       <div class="text-center">
         <Icon name="lucide:search-x" class="mx-auto h-16 w-16 brand-text-50" />
-        <h1 class="mt-6 text-2xl font-bold text-[var(--text-primary)] font-serif">This barbershop page doesn't exist.</h1>
+        <h1 class="mt-6 text-2xl font-bold text-[var(--text-primary)] font-serif">This business page doesn't exist.</h1>
         <p class="mt-3 max-w-md text-sm text-[var(--text-muted)] mx-auto">
           Looking for a specific shop? Check the URL and try again.
         </p>
@@ -757,12 +762,12 @@ const currentDayName = computed(() => {
                 <span class="text-[var(--text-muted)]">({{ reviewStats.total }})</span>
               </div>
               <div v-if="services.length" class="flex items-center gap-1.5 text-[var(--text-muted)]">
-                <Icon name="lucide:scissors" class="h-4 w-4 brand-text" />
+                <Icon name="lucide:briefcase" class="h-4 w-4 brand-text" />
                 <span><strong class="text-[var(--text-primary)]">{{ services.length }}</strong> Services</span>
               </div>
               <div v-if="barbers.length" class="flex items-center gap-1.5 text-[var(--text-muted)]">
                 <Icon name="lucide:users" class="h-4 w-4 brand-text" />
-                <span><strong class="text-[var(--text-primary)]">{{ barbers.length }}</strong> Barbers</span>
+                <span><strong class="text-[var(--text-primary)]">{{ barbers.length }}</strong> Staff</span>
               </div>
             </div>
             <div v-if="nextAvailableSlot || showUrgencySignal" class="mt-3 flex flex-wrap justify-center gap-2">
@@ -837,7 +842,7 @@ const currentDayName = computed(() => {
           </div>
           <!-- Empty state -->
           <div v-if="filteredServices.length === 0" class="col-span-full py-12 text-center">
-            <Icon name="lucide:scissors" class="mx-auto h-10 w-10 brand-text-30" />
+            <Icon name="lucide:briefcase" class="mx-auto h-10 w-10 brand-text-30" />
             <p class="mt-3 text-sm text-[var(--text-muted)]">
               No {{ categoryLabels[selectedCategory] }} services available.
             </p>
@@ -857,7 +862,7 @@ const currentDayName = computed(() => {
           <div class="mb-10 text-center">
             <div class="section-accent-line mx-auto mb-4 h-[2px] w-12 rounded-full brand-bg" />
             <h2 class="text-3xl sm:text-4xl font-bold text-[var(--text-primary)] font-serif tracking-wide">Our Team</h2>
-            <p class="mt-3 text-sm text-[var(--text-muted)]">Meet the skilled barbers behind the chair</p>
+            <p class="mt-3 text-sm text-[var(--text-muted)]">Meet the team behind the business</p>
           </div>
           <!-- Mobile — horizontal scroll -->
           <div class="relative md:hidden">

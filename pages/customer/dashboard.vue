@@ -168,7 +168,7 @@ onMounted(() => {
           </div>
           <div>
             <p class="text-sm font-semibold text-[var(--color-deep)]">Book an Appointment</p>
-            <p class="text-xs text-[var(--color-titanium)]">Find a barbershop and book now</p>
+            <p class="text-xs text-[var(--color-titanium)]">Find a business and book now</p>
           </div>
           <Icon name="lucide:chevron-right" class="ml-auto h-5 w-5 text-[var(--color-titanium)]" />
         </NuxtLink>

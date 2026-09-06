@@ -79,14 +79,13 @@ async function handleSignOut() {
     <nav class="glass fixed left-0 right-0 top-0 z-50 border-b border-[var(--color-silver)]/30">
       <div class="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
         <!-- Logo -->
-        <NuxtLink to="/customer/dashboard" class="flex items-center gap-2" @click="closeAllMenus">
-          <div class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn">
-            <Icon name="lucide:calendar" class="h-4 w-4 text-white" />
-          </div>
-          <span class="text-sm font-bold text-[var(--color-deep)]">
-            My Account
-          </span>
-        </NuxtLink>
+        <BrandLogo
+          to="/customer/dashboard"
+          text="My Account"
+          box-class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn shrink-0"
+          img-class="h-4 w-4"
+          text-class="text-sm font-bold text-[var(--color-deep)]"
+        />
 
         <!-- Desktop Nav Links + Account (md and up) -->
         <div class="hidden items-center gap-5 md:flex">

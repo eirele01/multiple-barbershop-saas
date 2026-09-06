@@ -291,7 +291,7 @@ function limitsFor(planCode: string): Record<string, number> {
 const usageMeters = computed(() => {
   const limits = limitsFor(effectivePlan.value)
   const defs = [
-    { key: 'services' as const, label: 'Services', icon: 'lucide:scissors' },
+    { key: 'services' as const, label: 'Services', icon: 'lucide:briefcase' },
     { key: 'gallery' as const, label: 'Gallery Images', icon: 'lucide:image' },
     { key: 'products' as const, label: 'Products', icon: 'lucide:package' },
     { key: 'staff' as const, label: 'Staff Members', icon: 'lucide:users' },

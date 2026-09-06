@@ -136,11 +136,12 @@ watch(isCollapsed, (val) => {
     <template #header="{ collapsed }">
       <!-- Header: Platform info -->
       <div class="flex items-center border-b border-[var(--color-silver)]/30 px-4 py-4" :class="collapsed ? 'justify-center' : 'gap-3'">
-        <div
-          class="gradient-metallic flex h-10 w-10 shrink-0 items-center justify-center rounded-btn"
-        >
-          <Icon name="lucide:shield" class="h-5 w-5 text-white" />
-        </div>
+        <BrandLogo
+          :to="null"
+          :text="''"
+          box-class="gradient-metallic flex h-10 w-10 shrink-0 items-center justify-center rounded-btn"
+          img-class="h-5 w-5"
+        />
         <div v-if="!collapsed" class="min-w-0 flex-1">
           <p class="truncate text-sm font-semibold text-[var(--color-deep)]">
             Super Admin

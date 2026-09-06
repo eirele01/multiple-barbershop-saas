@@ -622,7 +622,7 @@ onUnmounted(() => {
           </div>
           <div>
             <h2 class="text-lg font-semibold text-[var(--color-deep)]">Shop Information</h2>
-            <p class="text-sm text-[var(--color-titanium)]">Basic details about your barbershop</p>
+            <p class="text-sm text-[var(--color-titanium)]">Basic details about your business</p>
           </div>
         </div>
 
@@ -635,7 +635,7 @@ onUnmounted(() => {
             <input
               v-model="shopName"
               type="text"
-              placeholder="e.g., Classic Cuts Barbershop"
+              placeholder="e.g., Classic Cuts Studio"
               class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20"
             />
           </div>
@@ -646,7 +646,7 @@ onUnmounted(() => {
             <textarea
               v-model="shopDescription"
               rows="3"
-              placeholder="Tell customers about your barbershop..."
+              placeholder="Tell customers about your business..."
               class="input-design w-full border border-[var(--color-silver)]/50 bg-[var(--color-pure-white)] px-4 py-2.5 text-sm text-[var(--color-deep)] outline-none focus:border-[var(--color-info)] focus:ring-2 focus:ring-[var(--color-info)]/20 resize-none"
             />
             <p class="mt-1 text-right text-xs text-[var(--color-titanium)]">{{ shopDescription.length }}/500</p>

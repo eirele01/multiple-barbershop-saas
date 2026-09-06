@@ -5,11 +5,11 @@
  */
 
 useHead({
-  title: 'Privacy Policy — Reservation SaaS',
+  title: 'Privacy Policy — Reservation PH',
   meta: [
     {
       name: 'description',
-      content: 'How Reservation SaaS collects, uses, and protects your personal data.',
+      content: 'How Reservation PH collects, uses, and protects your personal data.',
     },
   ],
 })
@@ -77,8 +77,12 @@ const sections = [
     <header class="border-b border-[var(--color-silver)]/20 bg-white">
       <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
         <NuxtLink to="/" class="flex items-center gap-2 font-semibold text-[var(--color-deep)]">
-          <Icon name="lucide:scissors" class="h-5 w-5" />
-          Reservation SaaS
+          <BrandLogo
+            :to="null"
+            box-class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn shrink-0"
+            img-class="h-4 w-4"
+            text-class="font-semibold text-[var(--color-deep)]"
+          />
         </NuxtLink>
         <NuxtLink
           to="/"

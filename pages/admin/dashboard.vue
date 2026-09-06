@@ -197,7 +197,7 @@ const displayOnboarding = computed(() => showOnboardingBanner.value && !isOnboar
           </div>
           <div class="flex-1">
             <h3 class="text-lg font-bold text-[var(--color-deep)]">
-              Welcome to BarberShop! 🎉
+              Welcome to Reservation PH! 🎉
             </h3>
             <p class="mt-1 text-sm text-[var(--color-titanium)]">
               Your shop <span class="font-semibold text-[var(--color-deep)]">{{ shopStore.name || 'is now live' }}</span> is set up and ready to go.
