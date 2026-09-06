@@ -88,7 +88,7 @@ async function getPlatformEmailSettings(supabase: any) {
   return {
     resendApiKey: apiKey,
     senderEmail: map.get('platform_sender_email') || 'notifications@reservationph.com',
-    senderName: map.get('platform_sender_name') || 'BarberShop SaaS',
+    senderName: map.get('platform_sender_name') || 'Reservation PH',
   }
 }
 

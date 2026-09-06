@@ -261,8 +261,12 @@ function copyWebhookUrl() {
 
 // ─── Initialize ──────────────────────────────────────
 onMounted(() => {
-  fetchPaymentSettings()
-  fetchEmailSettings()
+  // Only admins can read/write payment & email settings — the APIs reject
+  // non-admin roles with 403, so skip the fetch entirely for staff/cashier/barber.
+  if (isAdmin.value) {
+    fetchPaymentSettings()
+    fetchEmailSettings()
+  }
 })
 
 // ─── Keyboard navigation for tabs ────────────────────

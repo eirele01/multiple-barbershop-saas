@@ -11,7 +11,56 @@
  */
 
 const authStore = useAuthStore()
+const shopStore = useShopStore()
 const route = useRoute()
+
+// Page-name map (mirrors breadcrumb pathMap below — single source of truth)
+const adminPageName = computed<string>(() => {
+  const pathMap: Record<string, string> = {
+    '/admin/dashboard': 'Dashboard',
+    '/admin/bookings': 'Bookings',
+    '/admin/calendar': 'Calendar',
+    '/admin/payments/verification': 'Verifications',
+    '/admin/payments/methods': 'Payment Methods',
+    '/admin/services': 'Services',
+    '/admin/staff': 'Team',
+    '/admin/shop-profile': 'Shop Profile',
+    '/admin/gallery': 'Gallery',
+    '/admin/products': 'Products',
+    '/admin/loyalty/settings': 'Loyalty Settings',
+    '/admin/loyalty/rewards': 'Loyalty Rewards',
+    '/admin/loyalty/members': 'Loyalty Members',
+    '/admin/loyalty/transactions': 'Loyalty Transactions',
+    '/admin/reports': 'Reports',
+    '/admin/logs': 'Activity Logs',
+    '/admin/settings': 'Settings',
+  }
+  const path = route.path
+  if (pathMap[path]) return pathMap[path]
+  // Nested detail routes → parent page name
+  const segments = path.split('/').filter(Boolean)
+  for (let i = segments.length; i >= 2; i--) {
+    const base = '/' + segments.slice(0, i).join('/')
+    if (pathMap[base]) return pathMap[base]
+  }
+  return 'Admin'
+})
+
+// Dynamic favicon + title: brand every admin page with the shop's own logo and current page.
+// useHead merges with nuxt.config.ts — these links *override* the defaults on admin pages.
+const shopHead = computed(() => {
+  const logo = shopStore.currentShop?.logo_url || ''
+  const name = shopStore.currentShop?.name || 'Admin'
+  return {
+    title: `${name} — ${adminPageName.value}`,
+    link: [
+      { rel: 'icon', type: 'image/png', sizes: '96x96', href: logo || '/favicon-96x96.png' },
+      { rel: 'icon', type: 'image/svg+xml', href: logo || '/favicon.svg' },
+      { rel: 'apple-touch-icon', sizes: '180x180', href: logo || '/apple-touch-icon.png' },
+    ],
+  }
+})
+useHead(shopHead)
 
 // Hydration guard: only render auth-dependent UI after client mount
 // This prevents SSR/client hydration mismatches since SSR has no auth state
@@ -114,7 +163,18 @@ const breadcrumbs = computed(() => {
       <!-- Top bar (mobile) -->
       <header class="flex h-14 items-center justify-between border-b border-[var(--color-silver)]/30 bg-[var(--color-pure-white)] px-4 lg:hidden">
         <div class="flex items-center gap-2">
-          <Icon name="lucide:scissors" class="h-5 w-5 text-[var(--color-deep)]" />
+          <img
+            v-if="shopStore.currentShop?.logo_url"
+            :src="shopStore.currentShop.logo_url"
+            :alt="shopStore.currentShop.name"
+            class="h-7 w-7 rounded-lg object-cover ring-1 ring-[var(--color-silver)]/30"
+          />
+          <BrandLogo
+            v-else
+            :to="null"
+            :text="''"
+            img-class="h-4 w-4"
+          />
           <span class="text-sm font-semibold text-[var(--color-deep)]">Admin</span>
         </div>
       </header>

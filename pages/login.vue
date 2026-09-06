@@ -284,8 +284,12 @@ function handleTabKeyLogin(e: KeyboardEvent) {
     <!-- Header -->
     <div class="mb-8 text-center">
       <NuxtLink to="/" class="inline-flex items-center gap-2 text-[var(--color-deep)]">
-        <Icon name="lucide:calendar" class="h-6 w-6" />
-        <span class="text-lg font-bold">Reservation PH</span>
+        <BrandLogo
+          :to="null"
+          box-class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn shrink-0"
+          img-class="h-4 w-4"
+          text-class="text-lg font-bold text-[var(--color-deep)]"
+        />
       </NuxtLink>
       <p class="mt-2 text-sm text-[var(--color-titanium)]">
         {{ activeTab === 'signin' ? 'Welcome back! Sign in to your account.' : 'Join us — create your account below.' }}
@@ -493,7 +497,7 @@ function handleTabKeyLogin(e: KeyboardEvent) {
             >
               <div class="flex items-center gap-3">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-[var(--color-deep)]/10 transition-colors group-hover:bg-[var(--color-deep)]/20">
-                  <Icon name="lucide:scissors" class="h-5 w-5 text-[var(--color-deep)]" />
+                  <Icon name="lucide:store" class="h-5 w-5 text-[var(--color-deep)]" />
                 </div>
                 <div>
                   <p class="text-sm font-semibold text-[var(--color-deep)]">Register My Shop</p>

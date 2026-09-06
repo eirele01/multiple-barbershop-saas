@@ -327,7 +327,7 @@ onMounted(() => {
         <!-- Top Services (Horizontal Bar) -->
         <div class="card-design p-5">
           <h3 class="mb-4 text-sm font-semibold text-[var(--color-deep)]">
-            <Icon name="lucide:scissors" class="mr-1.5 inline h-4 w-4" />
+            <Icon name="lucide:briefcase" class="mr-1.5 inline h-4 w-4" />
             Top Services by Bookings
           </h3>
           <div v-if="topServices.length === 0" class="py-8 text-center text-xs text-[var(--color-titanium)]">

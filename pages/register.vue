@@ -237,7 +237,7 @@ async function handleRegister() {
       Create Your Shop
     </h2>
     <p class="mb-6 text-center text-sm text-[var(--color-titanium)]">
-      Get your barbershop online in minutes
+      Get your business online in minutes
     </p>
 
     <!-- Step Progress -->
@@ -458,7 +458,7 @@ async function handleRegister() {
           v-model="description"
           maxlength="200"
           rows="2"
-          placeholder="Tell customers about your barbershop..."
+          placeholder="Tell customers about your business..."
           class="input-design w-full resize-none border border-[var(--color-silver)] bg-[var(--color-pure-white)] px-4 py-2.5 text-sm text-[var(--color-deep)] focus:border-[var(--color-deep)] focus:outline-none focus:ring-1 focus:ring-[var(--color-deep)]"
         />
         <p class="mt-1 text-right text-xs text-[var(--color-titanium)]">

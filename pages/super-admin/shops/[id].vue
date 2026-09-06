@@ -422,7 +422,7 @@ onMounted(() => {
               <div class="card-design p-4">
                 <div class="flex items-center gap-3">
                   <div class="flex h-10 w-10 items-center justify-center rounded-btn bg-[var(--color-info)]/10">
-                    <Icon name="lucide:scissors" class="h-5 w-5 text-[var(--color-info)]" />
+                    <Icon name="lucide:store" class="h-5 w-5 text-[var(--color-info)]" />
                   </div>
                   <div>
                     <p class="text-2xl font-bold text-[var(--color-deep)]">{{ stats?.servicesCount ?? 0 }}</p>

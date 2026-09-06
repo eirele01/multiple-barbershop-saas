@@ -24,7 +24,7 @@
  *   supabase functions deploy send-reminders
  *
  * Schedule (every 30 minutes):
- *   supabase functions schedule send-reminders --cron "*/30 * * * *"
+ *   supabase functions schedule send-reminders (runs every 30 minutes via cron)
  *
  * Test locally:
  *   supabase functions serve send-reminders --env-file .env.local
@@ -100,7 +100,7 @@ function appointmentReminderHtml(data: {
             <p style="margin:0 0 20px 0;font-size:16px;color:#1f2937;">Your appointment is coming up in <strong>${data.hoursBefore} hour${data.hoursBefore !== 1 ? 's' : ''}</strong>!</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:20px;">
               <tr><td style="padding:8px 12px;font-size:14px;color:#6b7280;border-bottom:1px solid #f3f4f6;" width="140">Service</td><td style="padding:8px 12px;font-size:14px;color:#1f2937;border-bottom:1px solid #f3f4f6;">${data.serviceName}</td></tr>
-              <tr><td style="padding:8px 12px;font-size:14px;color:#6b7280;border-bottom:1px solid #f3f4f6;">Barber</td><td style="padding:8px 12px;font-size:14px;color:#1f2937;border-bottom:1px solid #f3f4f6;">${data.barberName}</td></tr>
+              <tr><td style="padding:8px 12px;font-size:14px;color:#6b7280;border-bottom:1px solid #f3f4f6;">Staff Member</td><td style="padding:8px 12px;font-size:14px;color:#1f2937;border-bottom:1px solid #f3f4f6;">${data.barberName}</td></tr>
               <tr><td style="padding:8px 12px;font-size:14px;color:#6b7280;border-bottom:1px solid #f3f4f6;">Date</td><td style="padding:8px 12px;font-size:14px;color:#1f2937;border-bottom:1px solid #f3f4f6;">${data.date}</td></tr>
               <tr><td style="padding:8px 12px;font-size:14px;color:#6b7280;">Time</td><td style="padding:8px 12px;font-size:14px;color:#1f2937;">${data.time}</td></tr>
             </table>
@@ -135,7 +135,7 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const resendApiKey = Deno.env.get('RESEND_API_KEY') || ''
     const senderEmail = Deno.env.get('PLATFORM_SENDER_EMAIL') || 'notifications@reservationph.com'
-    const senderName = Deno.env.get('PLATFORM_SENDER_NAME') || 'BarberShop SaaS'
+    const senderName = Deno.env.get('PLATFORM_SENDER_NAME') || 'Reservation PH'
     const siteUrl = Deno.env.get('NUXT_PUBLIC_SITE_URL') || ''
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -224,7 +224,7 @@ serve(async (req: Request) => {
                 }
 
                 // Fetch barber name
-                let barberName = 'Your Barber'
+                let barberName = 'Your Staff Member'
                 if (booking.barber_id) {
                   const { data: barberUser } = await supabase
                     .from('barbers')
@@ -237,7 +237,7 @@ serve(async (req: Request) => {
                       .select('display_name')
                       .eq('id', barberUser.user_id)
                       .single()
-                    barberName = barberProfile?.display_name || 'Your Barber'
+                    barberName = barberProfile?.display_name || 'Your Staff Member'
                   }
                 }
 

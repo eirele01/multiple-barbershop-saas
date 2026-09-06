@@ -1,5 +1,5 @@
 /**
- * Email Templates — 9 HTML email templates for the Barbershop SaaS platform.
+ * Email Templates — 9 HTML email templates for the Reservation PH platform.
  *
  * All templates use:
  *   - Inline CSS only (no <style> tags — Gmail strips them)
@@ -155,7 +155,7 @@ export function bookingConfirmation(data: BookingConfirmationData): EmailResult 
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:20px;">
       ${detailRow('Service', data.serviceName)}
-      ${detailRow('Barber', data.barberName)}
+      ${detailRow('Staff Member', data.barberName)}
       ${detailRow('Date', data.date)}
       ${detailRow('Time', data.time)}
       ${detailRow('Amount', data.amount)}
@@ -200,7 +200,7 @@ export function appointmentReminder(data: AppointmentReminderData): EmailResult 
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:20px;">
       ${detailRow('Service', data.serviceName)}
-      ${detailRow('Barber', data.barberName)}
+      ${detailRow('Staff Member', data.barberName)}
       ${detailRow('Date', data.date)}
       ${detailRow('Time', data.time)}
     </table>
@@ -246,7 +246,7 @@ export function paymentVerified(data: PaymentVerifiedData): EmailResult {
     <p style="margin:12px 0 8px 0;font-size:14px;font-weight:600;color:#374151;">Booking Details</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;margin-bottom:20px;">
       ${detailRow('Service', data.serviceName)}
-      ${detailRow('Barber', data.barberName)}
+      ${detailRow('Staff Member', data.barberName)}
       ${detailRow('Date', data.date)}
       ${detailRow('Time', data.time)}
     </table>

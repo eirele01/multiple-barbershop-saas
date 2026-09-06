@@ -920,7 +920,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                     class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                   <div v-else class="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--color-deep)]/5 to-[var(--color-deep)]/10">
-                    <Icon name="lucide:scissors" class="h-10 w-10 text-[var(--color-deep)]/30" />
+                    <Icon name="lucide:briefcase" class="h-10 w-10 text-[var(--color-deep)]/30" />
                   </div>
                   <!-- Category badge -->
                   <span
@@ -958,7 +958,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
             <!-- Empty state -->
             <div v-if="services.length === 0" class="py-16 text-center">
               <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-silver)]/10">
-                <Icon name="lucide:scissors" class="h-8 w-8 text-[var(--color-silver)]" />
+                <Icon name="lucide:briefcase" class="h-8 w-8 text-[var(--color-silver)]" />
               </div>
               <p class="mt-4 text-sm font-medium text-[var(--color-deep)]">No services available yet</p>
               <p class="mt-1 text-xs text-[var(--color-titanium)]">Please check back later</p>
@@ -989,11 +989,11 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                ══════════════════════════════════════════ -->
           <Transition :name="transitionName" mode="out-in">
           <div v-if="wizard.currentStep === 2" key="step2">
-            <h2 class="text-xl font-bold text-[var(--color-deep)]">Select a Barber</h2>
+            <h2 class="text-xl font-bold text-[var(--color-deep)]">Select a Staff Member</h2>
             <p class="mt-1 text-sm text-[var(--color-titanium)]">Choose who you'd like for your {{ wizard.selectedService?.name }}</p>
 
             <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <!-- "Any Available Barber" card -->
+              <!-- "Any Available Staff" card -->
               <button
                 class="card-design flex flex-col items-center p-6 text-center transition-all min-h-[44px]"
                 :class="wizard.selectedBarberIsAny ? 'ring-2 ring-[var(--color-deep)] shadow-lg bg-[var(--color-deep)]/5' : 'hover:shadow-lg'"
@@ -1003,11 +1003,11 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                 <div class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-deep)]/10 to-[var(--color-deep)]/5">
                   <Icon name="lucide:users" class="h-8 w-8 text-[var(--color-deep)]" />
                 </div>
-                <h4 class="mt-3 text-sm font-semibold text-[var(--color-deep)]">Any Available Barber</h4>
+                <h4 class="mt-3 text-sm font-semibold text-[var(--color-deep)]">Any Available Staff</h4>
                 <p class="mt-1 text-xs text-[var(--color-titanium)]">
                   {{ getEligibleBarbers(wizard.selectedService).length > 0
-                    ? `${getEligibleBarbers(wizard.selectedService).length} barber${getEligibleBarbers(wizard.selectedService).length !== 1 ? 's' : ''} available`
-                    : 'We\'ll assign the next free barber' }}
+                    ? `${getEligibleBarbers(wizard.selectedService).length} staff member${getEligibleBarbers(wizard.selectedService).length !== 1 ? 's' : ''} available`
+                    : 'We\'ll assign the next available staff member' }}
                 </p>
                 <Transition name="fade">
                   <div v-if="wizard.selectedBarberIsAny" class="mt-3">
@@ -1065,7 +1065,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
               <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-silver)]/10">
                 <Icon name="lucide:user-x" class="h-8 w-8 text-[var(--color-silver)]" />
               </div>
-              <p class="mt-4 text-sm text-[var(--color-titanium)]">No barbers available for this service</p>
+              <p class="mt-4 text-sm text-[var(--color-titanium)]">No staff available for this service</p>
             </div>
 
             <!-- Desktop Continue -->
@@ -1164,15 +1164,15 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                 <p class="mt-3 text-sm font-medium text-[var(--color-titanium)]">No available time slots for this date</p>
                 <p class="mt-1 text-xs text-[var(--color-titanium)]">
                   {{ wizard.selectedBarberIsAny
-                    ? 'All barbers are fully booked on this date. Try a different date.'
-                    : 'This barber is fully booked on this date. Try a different date or select "Any Available Barber".' }}
+                    ? 'All staff members are fully booked on this date. Try a different date.'
+                    : 'This staff member is fully booked on this date. Try a different date or select "Any Available Staff".' }}
                 </p>
                 <button
                   v-if="!wizard.selectedBarberIsAny"
                   class="mt-3 text-xs font-medium text-[var(--color-info)] hover:underline min-h-[44px]"
                   @click="wizard.selectBarber(null, true)"
                 >
-                  Switch to Any Available Barber
+                  Switch to Any Available Staff
                 </button>
               </div>
 
@@ -1408,7 +1408,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
             <!-- Notes for barber -->
             <div class="mt-4 card-design p-6">
-              <label class="mb-1.5 block text-xs font-medium text-[var(--color-deep)]">Notes for Barber</label>
+              <label class="mb-1.5 block text-xs font-medium text-[var(--color-deep)]">Notes for Staff</label>
               <textarea
                 v-model="wizard.customerInfo.notes"
                 maxlength="300"
@@ -1451,7 +1451,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                   <div class="flex items-center gap-3 min-w-0">
                     <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-btn bg-[var(--color-deep)]/5">
                       <img v-if="wizard.selectedService?.image_url" :src="wizard.selectedService.image_url" :alt="wizard.selectedService.name" loading="lazy" class="h-full w-full object-cover" />
-                      <Icon v-else name="lucide:scissors" class="h-5 w-5 text-[var(--color-titanium)]" />
+                      <Icon v-else name="lucide:briefcase" class="h-5 w-5 text-[var(--color-titanium)]" />
                     </div>
                     <div class="min-w-0">
                       <p class="text-sm font-medium text-[var(--color-deep)] truncate">{{ wizard.selectedService?.name }}</p>
@@ -1467,7 +1467,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
                     <Icon v-else name="lucide:user" class="h-4 w-4 text-[var(--color-titanium)]" />
                   </div>
                   <div>
-                    <p class="text-xs text-[var(--color-titanium)]">Barber</p>
+                    <p class="text-xs text-[var(--color-titanium)]">Staff</p>
                     <p class="text-sm font-medium text-[var(--color-deep)]">{{ wizard.effectiveBarberName }}</p>
                   </div>
                 </div>
@@ -1888,7 +1888,7 @@ const weekDayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
               <div v-if="wizard.selectedService" class="flex items-start gap-3">
                 <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-btn bg-[var(--color-deep)]/5">
                   <img v-if="wizard.selectedService.image_url" :src="wizard.selectedService.image_url" loading="lazy" class="h-full w-full object-cover" />
-                  <Icon v-else name="lucide:scissors" class="h-5 w-5 text-[var(--color-titanium)]" />
+                  <Icon v-else name="lucide:briefcase" class="h-5 w-5 text-[var(--color-titanium)]" />
                 </div>
                 <div class="min-w-0 flex-1">
                   <p class="text-xs font-medium text-[var(--color-deep)] truncate">{{ wizard.selectedService.name }}</p>

@@ -13,8 +13,8 @@
 
 import { useAuthStore } from '~/stores/auth'
 import { useShopStore } from '~/stores/shop'
-import { checkTierLimit } from '~/utils/tierLimits'
-import type { Barber, BarberSchedule, BarberTimeOff, Service, UserRole } from '~/types/database'
+import { TIER_LIMITS } from '~/constants/tierLimits'
+import type { Barber, BarberSchedule, BarberTimeOff, Service, UserRole, SubscriptionPlan } from '~/types/database'
 
 definePageMeta({
   layout: 'admin',
@@ -54,6 +54,17 @@ const staff = ref<StaffMember[]>([])
 const services = ref<Service[]>([])
 const isLoading = ref(true)
 const hasError = ref(false)
+
+/**
+ * Staff limit for the current plan — initialized from the static map as an
+ * immediate fallback, then overwritten with the DB-backed value fetched from
+ * /api/billing/plans (the source of truth for Tier-Maker plans).
+ */
+const staffLimit = ref<number>(() => {
+  const code = (shopStore.effectivePlan || 'basic') as SubscriptionPlan
+  const limits = TIER_LIMITS[code] || TIER_LIMITS.basic
+  return limits.staff
+})
 
 // Slide-over panel state
 const isPanelOpen = ref(false)
@@ -103,9 +114,32 @@ const canManage = computed(() => {
 const isAdmin = computed(() => authStore.role === 'admin')
 
 // ─── Tier limit ──────────────────────────────────────
+// Uses the DB-backed staff limit (falls back to the static map if the
+// fetch hasn't completed yet). Wire format: Infinity = unlimited.
 const tierLimit = computed(() => {
-  const plan = shopStore.effectivePlan
-  return checkTierLimit(plan, 'staff', staff.value.length)
+  const limit = staffLimit.value
+  const currentCount = staff.value.length
+
+  if (limit === Infinity) {
+    return { allowed: true, current: currentCount, limit: Infinity, message: '' }
+  }
+  if (currentCount >= limit) {
+    return {
+      allowed: false,
+      current: currentCount,
+      limit,
+      message: `You've reached the maximum of ${limit} staff members on your current plan. Upgrade to a higher plan for more!`,
+    }
+  }
+  const remaining = limit - currentCount
+  return {
+    allowed: true,
+    current: currentCount,
+    limit,
+    message: remaining <= 2
+      ? `You can add ${remaining} more staff on your current plan. Consider upgrading for more.`
+      : '',
+  }
 })
 
 const staffLimitLabel = computed(() => {
@@ -145,7 +179,7 @@ onMounted(async () => {
     navigateTo('/admin/dashboard')
     return
   }
-  await Promise.all([fetchStaff(), fetchServices()])
+  await Promise.all([fetchStaff(), fetchServices(), fetchStaffLimitFromServer()])
 })
 
 // ─── Fetch staff ─────────────────────────────────────
@@ -160,6 +194,25 @@ async function fetchStaff() {
     toast.error('Failed to load staff')
   } finally {
     isLoading.value = false
+  }
+}
+
+// ─── Fetch the live staff limit for the current plan ──────
+// Source of truth is the DB plans table (Tier Maker). The wire format uses
+// -1 for unlimited (JSON can't store Infinity); we convert back to Infinity.
+async function fetchStaffLimitFromServer() {
+  try {
+    const data = await $fetch<{ plans: Array<{ code: string; limits: Record<string, number | null> }> }>('/api/billing/plans')
+    const currentCode = shopStore.effectivePlan || 'basic'
+    const match = data.plans?.find(p => p.code === currentCode)
+    const raw = match?.limits?.staff
+    if (raw === null || raw === undefined || raw === -1) {
+      staffLimit.value = Infinity
+    } else {
+      staffLimit.value = Math.max(0, Number.isFinite(Number(raw)) ? Number(raw) : 0)
+    }
+  } catch {
+    // Keep the static fallback — non-critical display field
   }
 }
 

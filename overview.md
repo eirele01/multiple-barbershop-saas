@@ -1,8 +1,8 @@
-# Barbershop SaaS — Codebase Overview
+# Reservation PH — Codebase Overview
 
 ## Identity
 
-**Multi-Tenant SaaS Barbershop Management Platform** — a full-stack application enabling barbershops to manage bookings, staff, payments, loyalty programs, and customer relationships. Built for the Philippine market with PayMongo integration as the primary payment processor.
+**Multi-Tenant SaaS Reservation & Booking Management Platform** — a full-stack application enabling businesses to manage bookings, staff, payments, loyalty programs, and customer relationships. Built for the Philippine market with PayMongo integration as the primary payment processor.
 
 ---
 
@@ -36,7 +36,7 @@
 
 ### Multi-Tenant Model
 
-The platform serves multiple barbershops (tenants) from a single codebase. Tenancy is enforced through:
+The platform serves multiple businesses (tenants) from a single codebase. Tenancy is enforced through:
 
 - **`shop_id` foreign key** on all tenant-scoped tables (`users`, `bookings`, `services`, etc.)
 - **Row Level Security (RLS)** in Supabase for client-side queries
@@ -68,7 +68,7 @@ Five roles with granular permission matrix in `auth` store:
 ## Directory Structure
 
 ```
-barbershop-saas/
+reservation-ph/
 ├── app.vue                           # Root component, auth/shop init
 ├── nuxt.config.ts                    # Config: modules, routeRules, runtimeConfig
 ├── tailwind.config.ts                # Theme: colors, fonts, shadcn tokens
@@ -189,7 +189,7 @@ barbershop-saas/
 │   │   │   └── session.ts            # GET current session
 │   │   ├── bookings/
 │   │   │   ├── [id].get.ts           # Booking detail
-│   │   │   ├── availability.get.ts   # Barber availability check
+│   │   │   ├── availability.get.ts   # Staff availability check
 │   │   │   └── create.post.ts        # Create new booking
 │   │   ├── customer/
 │   │   │   ├── bookings/             # Customer booking routes
@@ -263,7 +263,7 @@ barbershop-saas/
 ### Booking Flow (5-Step Wizard)
 
 1. **Select Service** — Choose from shop's active services
-2. **Select Barber** — Pick a specific barber or "Any Available"
+2. **Select Staff** — Pick a specific staff member or "Any Available"
 3. **Select Date & Time** — Real-time availability via `/api/bookings/availability.get.ts`
 4. **Customer Info** — Name, phone, email, notes
 5. **Review & Pay** — Review details, select payment method, apply loyalty rewards

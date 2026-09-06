@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const senderEmail = settingsMap.get('platform_sender_email') || 'notifications@reservationph.com'
-  const senderName = settingsMap.get('platform_sender_name') || 'BarberShop SaaS'
+  const senderName = settingsMap.get('platform_sender_name') || 'Reservation PH'
 
   // Get shop info for recipient and branding
   const { data: shop } = await supabase
@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
   const { error: sendError } = await resend.emails.send({
     from: `"${senderName}" <${senderEmail}>`,
     to: recipientEmail,
-    subject: `Test Email from ${shop?.name || 'BarberShop SaaS'} — Email System Connected`,
+    subject: `Test Email from ${shop?.name || 'Reservation PH'} — Email System Connected`,
     html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8" /></head>
