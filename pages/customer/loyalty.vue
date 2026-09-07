@@ -208,7 +208,7 @@ onMounted(() => {
       v-else-if="shopLoyaltyList.length === 0"
       icon="lucide:star"
       title="No Loyalty Points Yet"
-      message="Book an appointment at a participating barbershop to start earning points!"
+      message="Book an appointment at a participating business to start earning points!"
       action-label="Book Now"
       :action-fn="() => navigateTo('/')"
     />

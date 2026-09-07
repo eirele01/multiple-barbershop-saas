@@ -18,18 +18,6 @@
     </div>
 
     <div class="relative z-10 w-full max-w-md">
-      <!-- Logo -->
-      <div class="mb-8 text-center">
-        <NuxtLink to="/" class="inline-flex items-center gap-2">
-          <div class="gradient-metallic flex h-12 w-12 items-center justify-center rounded-btn">
-            <Icon name="lucide:calendar" class="h-6 w-6 text-white" />
-          </div>
-          <span class="text-2xl font-bold text-[var(--color-deep)]">
-            Reservation PH
-          </span>
-        </NuxtLink>
-      </div>
-
       <!-- Auth Card -->
       <div class="card-design p-8">
         <slot />

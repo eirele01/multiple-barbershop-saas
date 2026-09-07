@@ -1,5 +1,5 @@
 // ============================================
-// TypeScript Types for Barbershop SaaS
+// TypeScript Types for Reservation PH
 // Based on Section 7: Data Models
 // ============================================
 

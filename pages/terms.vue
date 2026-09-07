@@ -5,11 +5,11 @@
  */
 
 useHead({
-  title: 'Terms of Service — Reservation SaaS',
+  title: 'Terms of Service — Reservation PH',
   meta: [
     {
       name: 'description',
-      content: 'The terms governing your use of the Reservation SaaS platform.',
+      content: 'The terms governing your use of the Reservation PH platform.',
     },
   ],
 })
@@ -20,14 +20,14 @@ const sections = [
   {
     title: '1. Acceptance of Terms',
     items: [
-      'By accessing or using Reservation SaaS, you agree to be bound by these Terms of Service.',
+      'By accessing or using Reservation PH, you agree to be bound by these Terms of Service.',
       'If you do not agree to these terms, do not use the platform.',
     ],
   },
   {
     title: '2. The Platform',
     items: [
-      'Reservation SaaS provides online booking, payment, and loyalty tools for barbershops and service businesses in the Philippines.',
+      'Reservation PH provides online booking, payment, and loyalty tools for businesses and service providersrvice businesses in the Philippines.',
       'We host shop pages under our domain, but each shop is independently owned and operated.',
       'Shop owners are responsible for the accuracy of their services, pricing, availability, and staff schedules.',
     ],
@@ -94,8 +94,12 @@ const sections = [
     <header class="border-b border-[var(--color-silver)]/20 bg-white">
       <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
         <NuxtLink to="/" class="flex items-center gap-2 font-semibold text-[var(--color-deep)]">
-          <Icon name="lucide:scissors" class="h-5 w-5" />
-          Reservation SaaS
+          <BrandLogo
+            :to="null"
+            box-class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn shrink-0"
+            img-class="h-4 w-4"
+            text-class="font-semibold text-[var(--color-deep)]"
+          />
         </NuxtLink>
         <NuxtLink
           to="/"

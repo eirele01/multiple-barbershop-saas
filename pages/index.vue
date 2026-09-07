@@ -4,19 +4,28 @@
  * Public route — no authentication required
  */
 
+const config = useRuntimeConfig()
+const siteUrl = (config.public.siteUrl || 'https://www.reservationph.com').replace(/\/+$/, '')
+
 useHead({
-  title: 'Reservation SaaS — Online Booking for Businesses in the Philippines',
+  title: 'Reservation PH — Online Booking for Businesses in the Philippines',
   meta: [
     {
       name: 'description',
       content: 'Manage your business with online bookings, payments, and loyalty rewards. Built for businesses in the Philippines.',
     },
-    { property: 'og:title', content: 'Reservation SaaS — Online Booking for Businesses' },
+    { property: 'og:title', content: 'Reservation PH — Online Booking for Businesses' },
     { property: 'og:description', content: 'Manage your business with online bookings, payments, and loyalty rewards.' },
-    { property: 'og:image', content: '/og-default.png' },
+    { property: 'og:image', content: `${siteUrl}/og-default.png` },
+    { property: 'og:image:width', content: '1200' },
+    { property: 'og:image:height', content: '630' },
+    { property: 'og:url', content: siteUrl },
     { property: 'og:type', content: 'website' },
     { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:title', content: 'Reservation PH — Online Booking for Businesses' },
+    { name: 'twitter:image', content: `${siteUrl}/og-default.png` },
   ],
+  link: [{ rel: 'canonical', href: siteUrl }],
 })
 
 // ── Pricing section (dynamic — plans DB / Tier Maker is the source of truth) ──
@@ -364,7 +373,7 @@ function goToTop() {
             </div>
             <h4 class="mb-2 text-sm font-semibold text-[var(--color-deep)]">Book as a Guest</h4>
             <p class="text-xs text-[var(--color-titanium)]">
-              Pick a service, choose a barber, select a time, and pay — all without creating an account.
+              Pick a service, choose a staff member, select a time, and pay — all without creating an account.
             </p>
           </div>
           <div class="card-design p-6 text-center">
@@ -406,7 +415,20 @@ function goToTop() {
               :to="`/shop/${shop.slug}`"
               class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-silver)]/50 px-3 py-1.5 text-xs font-medium text-[var(--color-deep)] transition-colors hover:border-[var(--color-deep)] hover:bg-[var(--color-deep)]/5"
             >
-              <Icon name="lucide:scissors" class="h-3 w-3" />
+              <!-- Shop logo or initial fallback -->
+              <img
+                v-if="shop.logo_url"
+                :src="shop.logo_url"
+                :alt="shop.name"
+                loading="lazy"
+                class="h-4 w-4 rounded-full object-cover"
+              />
+              <span
+                v-else
+                class="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-deep)]/10 text-[10px] font-bold text-[var(--color-deep)]"
+              >
+                {{ shop.name.charAt(0).toUpperCase() }}
+              </span>
               {{ shop.name }}
             </NuxtLink>
           </div>
@@ -581,10 +603,13 @@ function goToTop() {
           <!-- Brand column -->
           <div>
             <div class="flex items-center gap-2">
-              <div class="gradient-metallic flex h-9 w-9 items-center justify-center rounded-btn">
-                <Icon name="lucide:calendar" class="h-4 w-4 text-white" />
-              </div>
-              <span class="text-lg font-bold text-[var(--color-deep)]">Reservation</span>
+              <BrandLogo
+                :to="null"
+                text="Reservation"
+                box-class="gradient-metallic flex h-9 w-9 items-center justify-center rounded-btn shrink-0"
+                img-class="h-4 w-4"
+                text-class="text-lg font-bold text-[var(--color-deep)]"
+              />
             </div>
             <p class="mt-4 max-w-xs text-sm text-[var(--color-titanium)]">
               The modern booking and business management platform, built for modern businesses.

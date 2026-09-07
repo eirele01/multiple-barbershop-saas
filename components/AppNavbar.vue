@@ -38,14 +38,7 @@ async function handleSignOut() {
       <div class="flex h-16 items-center justify-between">
         <!-- Logo / Brand -->
         <div class="flex items-center gap-2">
-          <NuxtLink to="/" class="flex items-center gap-2" @click="closeMobileMenu">
-            <div class="gradient-metallic flex h-9 w-9 items-center justify-center rounded-btn">
-              <Icon name="lucide:calendar" class="h-5 w-5 text-white" />
-            </div>
-            <span class="text-lg font-bold text-[var(--color-deep)]">
-              Reservation PH
-            </span>
-          </NuxtLink>
+          <BrandLogo to="/" @click="closeMobileMenu" />
         </div>
 
         <!-- Desktop Navigation -->

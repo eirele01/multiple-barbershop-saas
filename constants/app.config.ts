@@ -13,8 +13,8 @@ export const CURRENCY_LOCALE = 'en-PH' as const
 // ─── Platform Identity ─────────────────────────────────
 
 export const PLATFORM_SENDER_EMAIL = 'notifications@reservationph.com'
-export const PLATFORM_SENDER_NAME = 'BarberShop SaaS'
-export const FOOTER_POWERED_BY = 'Powered by Reservation SaaS'
+export const PLATFORM_SENDER_NAME = 'Reservation PH'
+export const FOOTER_POWERED_BY = 'Powered by Reservation PH'
 
 // ─── Pagination Defaults ───────────────────────────────
 

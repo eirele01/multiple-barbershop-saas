@@ -71,16 +71,28 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Barbershop SaaS',
+      title: 'Reservation PH — Online Booking for Any Business',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'description', content: 'Multi-Tenant SaaS Barbershop Management System' },
+        { name: 'description', content: 'Online booking and reservation management for any business — appointments, staff scheduling, payments, and loyalty.' },
       ],
       link: [
         {
           rel: 'stylesheet',
           href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap',
+        },
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
+        { rel: 'manifest', href: '/site.webmanifest' },
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+      ],
+      script: [
+        {
+          innerHTML: 'addEventListener("error",function(e){if(e.message&&e.message.includes("startTime")&&e.message.includes("reportAllChanges")){e.stopImmediatePropagation();e.preventDefault();}},true);',
         },
       ],
     },

@@ -125,7 +125,7 @@ export const useBookingWizard = defineStore('bookingWizard', {
     },
 
     effectiveBarberName(state): string {
-      if (state.selectedBarberIsAny) return 'Any Available Barber'
+      if (state.selectedBarberIsAny) return 'Any Available Staff'
       return state.selectedBarber?.display_name || 'Any Available Barber'
     },
 
@@ -160,7 +160,7 @@ export const useBookingWizard = defineStore('bookingWizard', {
     },
 
     stepLabels(): string[] {
-      return ['Service', 'Barber', 'Date & Time', 'Your Info', 'Review & Pay']
+      return ['Service', 'Staff Member', 'Date & Time', 'Your Info', 'Review & Pay']
     },
   },
 

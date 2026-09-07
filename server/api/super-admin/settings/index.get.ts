@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
 
     // ── Convert array to map object ──
     const defaultSettings: PlatformSettingsMap = {
-      platform_name: 'BarberShop SaaS',
+      platform_name: 'Reservation PH',
       platform_url: 'https://yourdomain.com',
       support_email: 'support@yourdomain.com',
       upgraded_monthly_price: '499',

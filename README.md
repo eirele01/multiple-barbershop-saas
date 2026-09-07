@@ -1,2 +1,2 @@
-# multiple-barbershop-saas
-The Modern Barbershop Management Platform
+# Reservation PH
+The Modern Reservation & Booking Management Platform

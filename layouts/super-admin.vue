@@ -75,9 +75,12 @@ const pageTitle = computed(() => {
       <!-- Top bar (mobile) -->
       <header class="flex h-14 items-center justify-between border-b border-[var(--color-silver)]/30 bg-[var(--color-pure-white)] px-4 lg:hidden">
         <div class="flex items-center gap-2">
-          <div class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn">
-            <Icon name="lucide:shield" class="h-4 w-4 text-white" />
-          </div>
+          <BrandLogo
+            :to="null"
+            :text="''"
+            box-class="gradient-metallic flex h-8 w-8 items-center justify-center rounded-btn shrink-0"
+            img-class="h-4 w-4"
+          />
           <span class="text-sm font-semibold text-[var(--color-deep)]">Super Admin</span>
         </div>
       </header>

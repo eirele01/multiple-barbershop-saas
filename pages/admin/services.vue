@@ -351,7 +351,7 @@ onMounted(async () => {
       <div>
         <h1 class="text-2xl font-bold text-[var(--color-deep)]">Services</h1>
         <p class="mt-1 text-sm text-[var(--color-titanium)]">
-          Manage the services your barbershop offers
+          Manage the services your business offers
         </p>
       </div>
       <div class="flex items-center gap-3">
@@ -405,7 +405,7 @@ onMounted(async () => {
     <!-- Empty State -->
     <EmptyState
       v-else-if="services.length === 0"
-      icon="lucide:scissors"
+      icon="lucide:sparkles"
       title="No Services Yet"
       message="Add your first service so customers can book appointments."
       action-label="Add Service"

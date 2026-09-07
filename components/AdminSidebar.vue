@@ -152,7 +152,7 @@ const navGroups = computed(() => {
         },
         {
           label: 'Services',
-          icon: 'lucide:scissors',
+          icon: 'lucide:briefcase',
           to: '/admin/services',
           roles: ['admin', 'manager'],
         },
@@ -319,12 +319,20 @@ function childBadge(child: any): number {
     <template #header="{ collapsed }">
       <!-- Header: Shop info -->
       <div class="flex items-center border-b border-[var(--color-silver)]/30 px-4 py-4" :class="collapsed ? 'justify-center' : 'gap-3'">
-        <div
-          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-[var(--color-deep)] text-white"
-        >
-          <Icon name="lucide:scissors" class="h-5 w-5" />
-        </div>
-        <div v-if="!collapsed" class="min-w-0 flex-1">
+         <img
+           v-if="shopStore.currentShop?.logo_url"
+           :src="shopStore.currentShop.logo_url"
+           :alt="shopStore.currentShop.name"
+           class="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-[var(--color-silver)]/30"
+         />
+         <BrandLogo
+           v-else
+           :to="null"
+           :text="''"
+           box-class="flex h-10 w-10 shrink-0 items-center justify-center rounded-btn bg-[var(--color-deep)]"
+           img-class="h-5 w-5"
+         />
+         <div v-if="!collapsed" class="min-w-0 flex-1">
           <p class="truncate text-sm font-semibold text-[var(--color-deep)]">
             {{ shopStore.name || 'My Shop' }}
           </p>
